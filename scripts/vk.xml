@@ -31,6 +31,7 @@ private version is maintained in the 1.0 branch of the member gitlab server.
         <vendorid name="KHR"    id="0x10000"            comment="This is the next available Khronos vendor ID"/>
         <vendorid name="VIV"    id="0x10001"            comment="Vivante vendor ID"/>
         <vendorid name="VSI"    id="0x10002"            comment="VeriSilicon vendor ID"/>
+        <vendorid name="KAZAN"  id="0x10003"            comment="Kazan Software Renderer"/>
     </vendorids>
 
     <tags comment="Vulkan vendor/author tags for extensions and layers">
@@ -106,7 +107,7 @@ private version is maintained in the 1.0 branch of the member gitlab server.
         <type category="define">// Vulkan 1.0 version number
 #define <name>VK_API_VERSION_1_0</name> <type>VK_MAKE_VERSION</type>(1, 0, 0)// Patch version should always be set to 0</type>
         <type category="define">// Version of this file
-#define <name>VK_HEADER_VERSION</name> 61</type>
+#define <name>VK_HEADER_VERSION</name> 62</type>
 
         <type category="define">
 #define <name>VK_DEFINE_HANDLE</name>(object) typedef struct object##_T* object;</type>
@@ -244,6 +245,10 @@ private version is maintained in the 1.0 branch of the member gitlab server.
         <type                                             category="bitmask">typedef <type>VkFlags</type> <name>VkPipelineCoverageToColorStateCreateFlagsNV</name>;</type>
         <type                                             category="bitmask">typedef <type>VkFlags</type> <name>VkPipelineCoverageModulationStateCreateFlagsNV</name>;</type>
         <type                                             category="bitmask">typedef <type>VkFlags</type> <name>VkValidationCacheCreateFlagsEXT</name>;</type>     <!-- creation flags (no bits yet) -->
+        <type requires="VkDebugUtilsMessageSeverityFlagBitsEXT"  category="bitmask">typedef <type>VkFlags</type> <name>VkDebugUtilsMessageSeverityFlagsEXT</name>;</type>
+        <type requires="VkDebugUtilsMessageTypeFlagBitsEXT"      category="bitmask">typedef <type>VkFlags</type> <name>VkDebugUtilsMessageTypeFlagsEXT</name>;</type>
+        <type                                             category="bitmask">typedef <type>VkFlags</type> <name>VkDebugUtilsMessengerCreateFlagsEXT</name>;</type>
+        <type                                             category="bitmask">typedef <type>VkFlags</type> <name>VkDebugUtilsMessengerCallbackDataFlagsEXT</name>;</type>
 
             <comment>Types which can be void pointers or class pointers, selected at compile time</comment>
         <type category="handle"><type>VK_DEFINE_HANDLE</type>(<name>VkInstance</name>)</type>
@@ -283,6 +288,7 @@ private version is maintained in the 1.0 branch of the member gitlab server.
         <type category="handle" parent="VkInstance"><type>VK_DEFINE_NON_DISPATCHABLE_HANDLE</type>(<name>VkSurfaceKHR</name>)</type>
         <type category="handle" parent="VkSurfaceKHR"><type>VK_DEFINE_NON_DISPATCHABLE_HANDLE</type>(<name>VkSwapchainKHR</name>)</type>
         <type category="handle" parent="VkInstance"><type>VK_DEFINE_NON_DISPATCHABLE_HANDLE</type>(<name>VkDebugReportCallbackEXT</name>)</type>
+        <type category="handle" parent="VkInstance"><type>VK_DEFINE_NON_DISPATCHABLE_HANDLE</type>(<name>VkDebugUtilsMessengerEXT</name>)</type>
 
             <comment>Types generated from corresponding enums tags below</comment>
         <type name="VkAttachmentLoadOp" category="enum"/>
@@ -420,6 +426,8 @@ private version is maintained in the 1.0 branch of the member gitlab server.
         <type name="VkChromaLocationKHR" category="enum"/>
         <type name="VkSamplerReductionModeEXT" category="enum"/>
         <type name="VkBlendOverlapEXT" category="enum"/>
+        <type name="VkDebugUtilsMessageSeverityFlagBitsEXT" category="enum"/>
+        <type name="VkDebugUtilsMessageTypeFlagBitsEXT" category="enum"/>
 
             <comment>The PFN_vk*Function types are used by VkAllocationCallbacks below</comment>
         <type category="funcpointer">typedef void (VKAPI_PTR *<name>PFN_vkInternalAllocationNotification</name>)(
@@ -461,6 +469,13 @@ private version is maintained in the 1.0 branch of the member gitlab server.
     const <type>char</type>*                                 pMessage,
     <type>void</type>*                                       pUserData);</type>
 
+            <comment>The PFN_vkDebugUtilsMessengerCallbackEXT type are used by the VK_EXT_debug_utils extension</comment>
+        <type category="funcpointer" requires="VkDebugUtilsMessengerCallbackDataEXT">typedef VkBool32 (VKAPI_PTR *<name>PFN_vkDebugUtilsMessengerCallbackEXT</name>)(
+    <type>VkDebugUtilsMessageSeverityFlagBitsEXT</type>           messageSeverity,
+    <type>VkDebugUtilsMessageTypeFlagsEXT</type>                  messageType,
+    const <type>VkDebugUtilsMessengerCallbackDataEXT</type>*      pCallbackData,
+    <type>void</type>*                                            pUserData);</type>
+
             <comment>Struct types</comment>
         <type category="struct" name="VkOffset2D">
             <member><type>int32_t</type>        <name>x</name></member>
@@ -491,10 +506,6 @@ private version is maintained in the 1.0 branch of the member gitlab server.
         <type category="struct" name="VkRect2D">
             <member><type>VkOffset2D</type>     <name>offset</name></member>
             <member><type>VkExtent2D</type>     <name>extent</name></member>
-        </type>
-        <type category="struct" name="VkRect3D">
-            <member><type>VkOffset3D</type>     <name>offset</name></member>
-            <member><type>VkExtent3D</type>     <name>extent</name></member>
         </type>
         <type category="struct" name="VkClearRect">
             <member><type>VkRect2D</type>       <name>rect</name></member>
@@ -852,7 +863,7 @@ private version is maintained in the 1.0 branch of the member gitlab server.
             <member>const <type>void</type>*            <name>pNext</name></member>
             <member optional="true"><type>VkShaderModuleCreateFlags</type> <name>flags</name></member>
             <member><type>size_t</type>                 <name>codeSize</name><comment>Specified in bytes</comment></member>
-            <member len="latexmath:[codeSize \over 4]">const <type>uint32_t</type>*            <name>pCode</name><comment>Binary code of size codeSize</comment></member>
+            <member len="latexmath:[codeSize \over 4]" altlen="codeSize / 4">const <type>uint32_t</type>*            <name>pCode</name><comment>Binary code of size codeSize</comment></member>
         </type>
         <type category="struct" name="VkDescriptorSetLayoutBinding">
             <member><type>uint32_t</type>               <name>binding</name><comment>Binding number for this entry</comment></member>
@@ -980,7 +991,7 @@ private version is maintained in the 1.0 branch of the member gitlab server.
             <member><type>VkSampleCountFlagBits</type>  <name>rasterizationSamples</name><comment>Number of samples used for rasterization</comment></member>
             <member><type>VkBool32</type>               <name>sampleShadingEnable</name><comment>optional (GL45)</comment></member>
             <member><type>float</type>                  <name>minSampleShading</name><comment>optional (GL45)</comment></member>
-            <member optional="true" len="latexmath:[\lceil{\mathit{rasterizationSamples} \over 32}\rceil]">const <type>VkSampleMask</type>*    <name>pSampleMask</name><comment>Array of sampleMask words</comment></member>
+            <member optional="true" len="latexmath:[\lceil{\mathit{rasterizationSamples} \over 32}\rceil]" altlen="ceil(rasterizationSamples / 32)">const <type>VkSampleMask</type>*    <name>pSampleMask</name><comment>Array of sampleMask words</comment></member>
             <member><type>VkBool32</type>               <name>alphaToCoverageEnable</name></member>
             <member><type>VkBool32</type>               <name>alphaToOneEnable</name></member>
         </type>
@@ -2542,7 +2553,7 @@ private version is maintained in the 1.0 branch of the member gitlab server.
             <member optional="true"><type>uint32_t</type>         <name>attachmentInitialSampleLocationsCount</name></member>
             <member len="attachmentInitialSampleLocationsCount">const <type>VkAttachmentSampleLocationsEXT</type>* <name>pAttachmentInitialSampleLocations</name></member>
             <member optional="true"><type>uint32_t</type>         <name>postSubpassSampleLocationsCount</name></member>
-            <member len="postSubpassSampleLocationsCount">const <type>VkSubpassSampleLocationsEXT</type>* <name>pSubpassSampleLocations</name></member>
+            <member len="postSubpassSampleLocationsCount">const <type>VkSubpassSampleLocationsEXT</type>* <name>pPostSubpassSampleLocations</name></member>
         </type>
         <type category="struct" name="VkPipelineSampleLocationsStateCreateInfoEXT" structextends="VkPipelineMultisampleStateCreateInfo">
             <member values="VK_STRUCTURE_TYPE_PIPELINE_SAMPLE_LOCATIONS_STATE_CREATE_INFO_EXT"><type>VkStructureType</type> <name>sType</name></member>
@@ -2617,6 +2628,59 @@ private version is maintained in the 1.0 branch of the member gitlab server.
             <member values="VK_STRUCTURE_TYPE_SHADER_MODULE_VALIDATION_CACHE_CREATE_INFO_EXT"><type>VkStructureType</type> <name>sType</name></member>
             <member>const <type>void</type>*            <name>pNext</name></member>                          <!-- Pointer to next structure -->
             <member><type>VkValidationCacheEXT</type>    <name>validationCache</name></member>               <!-- Validation cache handle -->
+        </type>
+        <type category="struct" name="VkNativeBufferANDROID">
+            <member values="VK_STRUCTURE_TYPE_NATIVE_BUFFER_ANDROID"><type>VkStructureType</type> <name>sType</name></member>
+            <member>const <type>void</type>* <name>pNext</name></member>
+            <member>const <type>void</type>* <name>handle</name></member>
+            <member><type>int</type> <name>stride</name></member>
+            <member><type>int</type> <name>format</name></member>
+            <member><type>int</type> <name>usage</name></member>
+        </type>
+        <type category="struct" name="VkDebugUtilsObjectNameInfoEXT">
+            <member values="VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT"><type>VkStructureType</type> <name>sType</name></member>
+            <member>const <type>void</type>*                                            <name>pNext</name></member>
+            <member><type>VkObjectType</type>                                           <name>objectType</name></member>
+            <member><type>uint64_t</type>                                               <name>objectHandle</name></member>
+            <member optional="true" len="null-terminated">const <type>char</type>*      <name>pObjectName</name></member>
+        </type>
+        <type category="struct" name="VkDebugUtilsObjectTagInfoEXT">
+            <member values="VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_TAG_INFO_EXT"><type>VkStructureType</type> <name>sType</name></member>
+            <member>const <type>void</type>*                            <name>pNext</name></member>
+            <member><type>VkObjectType</type>                           <name>objectType</name></member>
+            <member><type>uint64_t</type>                               <name>objectHandle</name></member>
+            <member><type>uint64_t</type>                               <name>tagName</name></member>
+            <member><type>size_t</type>                                 <name>tagSize</name></member>
+            <member len="tagSize">const <type>void</type>*              <name>pTag</name></member>
+        </type>
+        <type category="struct" name="VkDebugUtilsLabelEXT">
+            <member values="VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT"><type>VkStructureType</type> <name>sType</name></member>
+            <member>const <type>void</type>*                            <name>pNext</name></member>
+            <member len="null-terminated">const <type>char</type>*      <name>pLabelName</name></member>
+            <member optional="true"><type>float</type>                  <name>color</name>[4]</member>
+        </type>
+        <type category="struct" name="VkDebugUtilsMessengerCreateInfoEXT" structextends="VkInstanceCreateInfo">
+            <member values="VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT"><type>VkStructureType</type> <name>sType</name></member>
+            <member>const <type>void</type>*                                          <name>pNext</name></member>
+            <member optional="true"><type>VkDebugUtilsMessengerCreateFlagsEXT</type>  <name>flags</name></member>
+            <member><type>VkDebugUtilsMessageSeverityFlagsEXT</type>                  <name>messageSeverity</name></member>
+            <member><type>VkDebugUtilsMessageTypeFlagsEXT</type>                      <name>messageType</name></member>
+            <member><type>PFN_vkDebugUtilsMessengerCallbackEXT</type>                 <name>pfnUserCallback</name></member>
+            <member optional="true"><type>void</type>*                                <name>pUserData</name></member>
+        </type>
+        <type category="struct" name="VkDebugUtilsMessengerCallbackDataEXT">
+            <member values="VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CALLBACK_DATA_EXT"><type>VkStructureType</type> <name>sType</name></member>
+            <member optional="true">const <type>void</type>*                                                        <name>pNext</name></member>
+            <member optional="true"><type>VkDebugUtilsMessengerCallbackDataFlagsEXT</type>                          <name>flags</name></member>
+            <member optional="true" len="null-terminated">const <type>char</type>*                                  <name>pMessageIdName</name></member>
+            <member optional="true"><type>int32_t</type>                                                            <name>messageIdNumber</name></member>
+            <member len="null-terminated">const <type>char</type>*                                                  <name>pMessage</name></member>
+            <member optional="true"><type>uint32_t</type>                                                           <name>queueLabelCount</name></member>
+            <member noautovalidity="true" optional="true" len="queueLabelCount"><type>VkDebugUtilsLabelEXT</type>*  <name>pQueueLabels</name></member>
+            <member optional="true"><type>uint32_t</type>                                                           <name>cmdBufLabelCount</name></member>
+            <member noautovalidity="true" optional="true" len="cmdBufLabelCount"><type>VkDebugUtilsLabelEXT</type>* <name>pCmdBufLabels</name></member>
+            <member><type>uint32_t</type>                                                                           <name>objectCount</name></member>
+            <member noautovalidity="true" len="objectCount"><type>VkDebugUtilsObjectNameInfoEXT</type>*             <name>pObjects</name></member>
         </type>
     </types>
 
@@ -3643,6 +3707,17 @@ private version is maintained in the 1.0 branch of the member gitlab server.
     </enums>
     <enums name="VkValidationCacheHeaderVersionEXT" type="enum">
         <enum value="1"     name="VK_VALIDATION_CACHE_HEADER_VERSION_ONE_EXT"/>
+    </enums>
+    <enums name="VkDebugUtilsMessageSeverityFlagBitsEXT" type="bitmask">
+        <enum bitpos="0"     name="VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT"/>
+        <enum bitpos="4"     name="VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT"/>
+        <enum bitpos="8"     name="VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT"/>
+        <enum bitpos="12"    name="VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT"/>
+    </enums>
+    <enums name="VkDebugUtilsMessageTypeFlagBitsEXT" type="bitmask">
+        <enum bitpos="0"     name="VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT"/>
+        <enum bitpos="1"     name="VK_DEBUG_UTILS_MESSAGE_TYPE_SPECIFICATION_BIT_EXT"/>
+        <enum bitpos="2"     name="VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT"/>
     </enums>
 
     <commands comment="Vulkan command definitions">
@@ -5110,7 +5185,7 @@ private version is maintained in the 1.0 branch of the member gitlab server.
             <proto><type>VkResult</type> <name>vkRegisterDeviceEventEXT</name></proto>
             <param><type>VkDevice</type> <name>device</name></param>
             <param>const <type>VkDeviceEventInfoEXT</type>* <name>pDeviceEventInfo</name></param>
-            <param>const <type>VkAllocationCallbacks</type>* <name>pAllocator</name></param>
+            <param optional="true">const <type>VkAllocationCallbacks</type>* <name>pAllocator</name></param>
             <param><type>VkFence</type>* <name>pFence</name></param>
         </command>
         <command successcodes="VK_SUCCESS">
@@ -5118,7 +5193,7 @@ private version is maintained in the 1.0 branch of the member gitlab server.
             <param><type>VkDevice</type> <name>device</name></param>
             <param><type>VkDisplayKHR</type> <name>display</name></param>
             <param>const <type>VkDisplayEventInfoEXT</type>* <name>pDisplayEventInfo</name></param>
-            <param>const <type>VkAllocationCallbacks</type>* <name>pAllocator</name></param>
+            <param optional="true">const <type>VkAllocationCallbacks</type>* <name>pAllocator</name></param>
             <param><type>VkFence</type>* <name>pFence</name></param>
         </command>
         <command successcodes="VK_SUCCESS,VK_ERROR_DEVICE_LOST,VK_ERROR_OUT_OF_DATE_KHR">
@@ -5336,7 +5411,7 @@ private version is maintained in the 1.0 branch of the member gitlab server.
             <param optional="true" externsync="true"><type>VkSamplerYcbcrConversionKHR</type> <name>ycbcrConversion</name></param>
             <param optional="true">const <type>VkAllocationCallbacks</type>* <name>pAllocator</name></param>
         </command>
-        <command successcodes="VK_SUCCESS" errorcodes="VK_ERROR_OUT_OF_HOST_MEMORY,VK_ERROR_OUT_OF_DEVICE_MEMORY">
+        <command successcodes="VK_SUCCESS" errorcodes="VK_ERROR_OUT_OF_HOST_MEMORY">
             <proto><type>VkResult</type> <name>vkCreateValidationCacheEXT</name></proto>
             <param><type>VkDevice</type> <name>device</name></param>
             <param>const <type>VkValidationCacheCreateInfoEXT</type>* <name>pCreateInfo</name></param>
@@ -5362,6 +5437,88 @@ private version is maintained in the 1.0 branch of the member gitlab server.
             <param externsync="true"><type>VkValidationCacheEXT</type> <name>dstCache</name></param>
             <param><type>uint32_t</type> <name>srcCacheCount</name></param>
             <param len="srcCacheCount">const <type>VkValidationCacheEXT</type>* <name>pSrcCaches</name></param>
+        </command>
+        <command>
+            <proto><type>VkResult</type> <name>vkGetSwapchainGrallocUsageANDROID</name></proto>
+            <param><type>VkDevice</type> <name>device</name></param>
+            <param><type>VkFormat</type> <name>format</name></param>
+            <param><type>VkImageUsageFlags</type> <name>imageUsage</name></param>
+            <param><type>int</type>* <name>grallocUsage</name></param>
+        </command>
+        <command>
+            <proto><type>VkResult</type> <name>vkAcquireImageANDROID</name></proto>
+            <param><type>VkDevice</type> <name>device</name></param>
+            <param><type>VkImage</type> <name>image</name></param>
+            <param><type>int</type> <name>nativeFenceFd</name></param>
+            <param><type>VkSemaphore</type> <name>semaphore</name></param>
+            <param><type>VkFence</type> <name>fence</name></param>
+        </command>
+        <command>
+            <proto><type>VkResult</type> <name>vkQueueSignalReleaseImageANDROID</name></proto>
+            <param><type>VkQueue</type> <name>queue</name></param>
+            <param><type>uint32_t</type> <name>waitSemaphoreCount</name></param>
+            <param>const <type>VkSemaphore</type>* <name>pWaitSemaphores</name></param>
+            <param><type>VkImage</type> <name>image</name></param>
+            <param><type>int</type>* <name>pNativeFenceFd</name></param>
+        </command>
+        <command successcodes="VK_SUCCESS" errorcodes="VK_ERROR_OUT_OF_HOST_MEMORY,VK_ERROR_OUT_OF_DEVICE_MEMORY">
+            <proto><type>VkResult</type> <name>vkSetDebugUtilsObjectNameEXT</name></proto>
+            <param><type>VkDevice</type> <name>device</name></param>
+            <param externsync="pNameInfo.objectHandle">const <type>VkDebugUtilsObjectNameInfoEXT</type>* <name>pNameInfo</name></param>
+        </command>
+        <command successcodes="VK_SUCCESS" errorcodes="VK_ERROR_OUT_OF_HOST_MEMORY,VK_ERROR_OUT_OF_DEVICE_MEMORY">
+            <proto><type>VkResult</type> <name>vkSetDebugUtilsObjectTagEXT</name></proto>
+            <param><type>VkDevice</type> <name>device</name></param>
+            <param externsync="pTagInfo.objectHandle">const <type>VkDebugUtilsObjectTagInfoEXT</type>* <name>pTagInfo</name></param>
+        </command>
+        <command>
+            <proto><type>void</type> <name>vkQueueBeginDebugUtilsLabelEXT</name></proto>
+            <param><type>VkQueue</type> <name>queue</name></param>
+            <param>const <type>VkDebugUtilsLabelEXT</type>* <name>pLabelInfo</name></param>
+        </command>
+        <command>
+            <proto><type>void</type> <name>vkQueueEndDebugUtilsLabelEXT</name></proto>
+            <param><type>VkQueue</type> <name>queue</name></param>
+        </command>
+        <command>
+            <proto><type>void</type> <name>vkQueueInsertDebugUtilsLabelEXT</name></proto>
+            <param><type>VkQueue</type> <name>queue</name></param>
+            <param>const <type>VkDebugUtilsLabelEXT</type>* <name>pLabelInfo</name></param>
+        </command>
+        <command queues="graphics,compute" renderpass="both" cmdbufferlevel="primary,secondary">
+            <proto><type>void</type> <name>vkCmdBeginDebugUtilsLabelEXT</name></proto>
+            <param><type>VkCommandBuffer</type> <name>commandBuffer</name></param>
+            <param>const <type>VkDebugUtilsLabelEXT</type>* <name>pLabelInfo</name></param>
+        </command>
+        <command queues="graphics,compute" renderpass="both" cmdbufferlevel="primary,secondary">
+            <proto><type>void</type> <name>vkCmdEndDebugUtilsLabelEXT</name></proto>
+            <param><type>VkCommandBuffer</type> <name>commandBuffer</name></param>
+        </command>
+        <command queues="graphics,compute" renderpass="both" cmdbufferlevel="primary,secondary">
+            <proto><type>void</type> <name>vkCmdInsertDebugUtilsLabelEXT</name></proto>
+            <param><type>VkCommandBuffer</type> <name>commandBuffer</name></param>
+            <param>const <type>VkDebugUtilsLabelEXT</type>* <name>pLabelInfo</name></param>
+        </command>
+        <command successcodes="VK_SUCCESS" errorcodes="VK_ERROR_OUT_OF_HOST_MEMORY">
+            <proto><type>VkResult</type> <name>vkCreateDebugUtilsMessengerEXT</name></proto>
+            <param><type>VkInstance</type> <name>instance</name></param>
+            <param>const <type>VkDebugUtilsMessengerCreateInfoEXT</type>* <name>pCreateInfo</name></param>
+            <param optional="true">const <type>VkAllocationCallbacks</type>* <name>pAllocator</name></param>
+            <param><type>VkDebugUtilsMessengerEXT</type>* <name>pMessenger</name></param>
+        </command>
+        <command>
+            <proto><type>void</type> <name>vkDestroyDebugUtilsMessengerEXT</name></proto>
+            <param><type>VkInstance</type> <name>instance</name></param>
+            <param externsync="true"><type>VkDebugUtilsMessengerEXT</type> <name>messenger</name></param>
+            <param optional="true">const <type>VkAllocationCallbacks</type>* <name>pAllocator</name></param>
+        </command>
+        <command>
+            <proto><type>void</type> <name>vkSubmitDebugUtilsMessageEXT</name></proto>
+            <param><type>VkInstance</type> <name>instance</name></param>
+            <param><type>VkDebugUtilsMessageSeverityFlagBitsEXT</type> <name>messageSeverity</name></param>
+            <param><type>VkDebugUtilsMessageTypeFlagsEXT</type> <name>messageTypes</name></param>
+            <param>const <type>VkDebugUtilsMessengerCallbackDataEXT</type>* <name>pCallbackData</name></param>
+>>>>>>> Add VK_EXT_debug_utils extension
         </command>
     </commands>
 
@@ -5726,9 +5883,14 @@ private version is maintained in the 1.0 branch of the member gitlab server.
         </extension>
         <extension name="VK_ANDROID_native_buffer" number="11" supported="disabled">
             <require>
-                <enum value="4"                                         name="VK_ANDROID_NATIVE_BUFFER_SPEC_VERSION"/>
+                <enum value="5"                                         name="VK_ANDROID_NATIVE_BUFFER_SPEC_VERSION"/>
                 <enum value="11"                                        name="VK_ANDROID_NATIVE_BUFFER_NUMBER"/>
                 <enum value="&quot;VK_ANDROID_native_buffer&quot;"      name="VK_ANDROID_NATIVE_BUFFER_NAME"/>
+                <enum offset="0" extends="VkStructureType"              name="VK_STRUCTURE_TYPE_NATIVE_BUFFER_ANDROID"/>
+                <type name="VkNativeBufferANDROID"/>
+                <command name="vkGetSwapchainGrallocUsageANDROID"/>
+                <command name="vkAcquireImageANDROID"/>
+                <command name="vkQueueSignalReleaseImageANDROID"/>
             </require>
         </extension>
         <extension name="VK_EXT_debug_report" number="12" type="instance" author="GOOGLE" contact="Courtney Goeltzenleuchter @courtney" supported="vulkan">
@@ -5980,10 +6142,10 @@ private version is maintained in the 1.0 branch of the member gitlab server.
                 <enum value="&quot;VK_AMD_extension_46&quot;"           name="VK_AMD_EXTENSION_46_EXTENSION_NAME"/>
             </require>
         </extension>
-        <extension name="VK_AMD_extension_47" number="47" author="AMD" contact="Daniel Rakos @aqnuep" supported="disabled">
+        <extension name="VK_AMD_shader_image_load_store_lod" number="47" author="AMD" contact="Dominik Witczak @dominikwitczak_amd" supported="vulkan" type="device">
             <require>
-                <enum value="0"                                         name="VK_AMD_EXTENSION_47_SPEC_VERSION"/>
-                <enum value="&quot;VK_AMD_extension_47&quot;"           name="VK_AMD_EXTENSION_47_EXTENSION_NAME"/>
+                <enum value="1"                                              name="VK_AMD_SHADER_IMAGE_LOAD_STORE_LOD_SPEC_VERSION"/>
+                <enum value="&quot;VK_AMD_shader_image_load_store_lod&quot;" name="VK_AMD_SHADER_IMAGE_LOAD_STORE_LOD_EXTENSION_NAME"/>
             </require>
         </extension>
         <extension name="VK_NVX_extension_48" number="48" author="NVX" contact="James Jones @cubanismo" supported="disabled">
@@ -6882,10 +7044,32 @@ private version is maintained in the 1.0 branch of the member gitlab server.
                 <type name="VkMemoryDedicatedAllocateInfoKHR"/>
             </require>
         </extension>
-        <extension name="VK_EXT_extension_129" number="129" author="LUNARG" contact="Mark Young @MarkY_LunarG" supported="disabled">
+        <extension name="VK_EXT_debug_utils" number="129" type="instance" author="EXT" contact="Mark Young @MarkY_LunarG" supported="vulkan">
             <require>
-                <enum value="0"                                         name="VK_KHR_EXTENSION_129_SPEC_VERSION"/>
-                <enum value="&quot;VK_EXT_extension_129&quot;"          name="VK_KHR_EXTENSION_129_EXTENSION_NAME"/>
+                <enum value="1"                                         name="VK_EXT_DEBUG_UTILS_SPEC_VERSION"/>
+                <enum value="&quot;VK_EXT_debug_utils&quot;"            name="VK_EXT_DEBUG_UTILS_EXTENSION_NAME"/>
+                <enum offset="0" extends="VkStructureType"              name="VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT"/>
+                <enum offset="1" extends="VkStructureType"              name="VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_TAG_INFO_EXT"/>
+                <enum offset="2" extends="VkStructureType"              name="VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT"/>
+                <enum offset="3" extends="VkStructureType"              name="VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CALLBACK_DATA_EXT"/>
+                <enum offset="4" extends="VkStructureType"              name="VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT"/>
+                <enum offset="0" extends="VkObjectType"                 name="VK_OBJECT_TYPE_DEBUG_UTILS_MESSENGER_EXT"          comment="VkDebugUtilsMessengerEXT"/>
+                <type name="VkDebugUtilsObjectNameInfoEXT"/>
+                <type name="VkDebugUtilsObjectTagInfoEXT"/>
+                <type name="VkDebugUtilsLabelEXT"/>
+                <type name="VkDebugUtilsMessengerCallbackDataEXT"/>
+                <type name="VkDebugUtilsMessengerCreateInfoEXT"/>
+                <command name="vkSetDebugUtilsObjectNameEXT"/>
+                <command name="vkSetDebugUtilsObjectTagEXT"/>
+                <command name="vkQueueBeginDebugUtilsLabelEXT"/>
+                <command name="vkQueueEndDebugUtilsLabelEXT"/>
+                <command name="vkQueueInsertDebugUtilsLabelEXT"/>
+                <command name="vkCmdBeginDebugUtilsLabelEXT"/>
+                <command name="vkCmdEndDebugUtilsLabelEXT"/>
+                <command name="vkCmdInsertDebugUtilsLabelEXT"/>
+                <command name="vkCreateDebugUtilsMessengerEXT"/>
+                <command name="vkDestroyDebugUtilsMessengerEXT"/>
+                <command name="vkSubmitDebugUtilsMessageEXT"/>
             </require>
         </extension>
         <extension name="VK_KHR_extension_130" number="130" author="KHR" contact="Jesse Hall @jessehall" supported="disabled">
@@ -7152,69 +7336,69 @@ private version is maintained in the 1.0 branch of the member gitlab server.
         </extension>
         <extension name="VK_KHR_sampler_ycbcr_conversion" number="157" type="device" requires="VK_KHR_maintenance1,VK_KHR_bind_memory2,VK_KHR_get_memory_requirements2,VK_KHR_get_physical_device_properties2" author="KHR" contact="Andrew Garrard @fluppeteer" supported="vulkan">
             <require>
-                 <enum value="1"                                           name="VK_KHR_SAMPLER_YCBCR_CONVERSION_SPEC_VERSION"/>
-                 <enum value="&quot;VK_KHR_sampler_ycbcr_conversion&quot;" name="VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME"/>
-                 <enum offset="0" extends="VkStructureType"                name="VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_CREATE_INFO_KHR"/>
-                 <enum offset="1" extends="VkStructureType"                name="VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_INFO_KHR"/>
-                 <enum offset="2" extends="VkStructureType"                name="VK_STRUCTURE_TYPE_BIND_IMAGE_PLANE_MEMORY_INFO_KHR"/>
-                 <enum offset="3" extends="VkStructureType"                name="VK_STRUCTURE_TYPE_IMAGE_PLANE_MEMORY_REQUIREMENTS_INFO_KHR"/>
-                 <enum offset="4" extends="VkStructureType"                name="VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES_KHR"/>
-                 <enum offset="5" extends="VkStructureType"                name="VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_IMAGE_FORMAT_PROPERTIES_KHR"/>
-                 <enum offset="0" extends="VkDebugReportObjectTypeEXT"     name="VK_DEBUG_REPORT_OBJECT_TYPE_SAMPLER_YCBCR_CONVERSION_KHR_EXT"/>
-                 <enum offset="0" extends="VkObjectType"                   name="VK_OBJECT_TYPE_SAMPLER_YCBCR_CONVERSION_KHR"/>
-                 <enum offset="0" extends="VkFormat"                       name="VK_FORMAT_G8B8G8R8_422_UNORM_KHR"/>
-                 <enum offset="1" extends="VkFormat"                       name="VK_FORMAT_B8G8R8G8_422_UNORM_KHR"/>
-                 <enum offset="2" extends="VkFormat"                       name="VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM_KHR"/>
-                 <enum offset="3" extends="VkFormat"                       name="VK_FORMAT_G8_B8R8_2PLANE_420_UNORM_KHR"/>
-                 <enum offset="4" extends="VkFormat"                       name="VK_FORMAT_G8_B8_R8_3PLANE_422_UNORM_KHR"/>
-                 <enum offset="5" extends="VkFormat"                       name="VK_FORMAT_G8_B8R8_2PLANE_422_UNORM_KHR"/>
-                 <enum offset="6" extends="VkFormat"                       name="VK_FORMAT_G8_B8_R8_3PLANE_444_UNORM_KHR"/>
-                 <enum offset="7" extends="VkFormat"                       name="VK_FORMAT_R10X6_UNORM_PACK16_KHR"/>
-                 <enum offset="8" extends="VkFormat"                       name="VK_FORMAT_R10X6G10X6_UNORM_2PACK16_KHR"/>
-                 <enum offset="9" extends="VkFormat"                       name="VK_FORMAT_R10X6G10X6B10X6A10X6_UNORM_4PACK16_KHR"/>
-                 <enum offset="10" extends="VkFormat"                      name="VK_FORMAT_G10X6B10X6G10X6R10X6_422_UNORM_4PACK16_KHR"/>
-                 <enum offset="11" extends="VkFormat"                      name="VK_FORMAT_B10X6G10X6R10X6G10X6_422_UNORM_4PACK16_KHR"/>
-                 <enum offset="12" extends="VkFormat"                      name="VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_420_UNORM_3PACK16_KHR"/>
-                 <enum offset="13" extends="VkFormat"                      name="VK_FORMAT_G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16_KHR"/>
-                 <enum offset="14" extends="VkFormat"                      name="VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_422_UNORM_3PACK16_KHR"/>
-                 <enum offset="15" extends="VkFormat"                      name="VK_FORMAT_G10X6_B10X6R10X6_2PLANE_422_UNORM_3PACK16_KHR"/>
-                 <enum offset="16" extends="VkFormat"                      name="VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_444_UNORM_3PACK16_KHR"/>
-                 <enum offset="17" extends="VkFormat"                      name="VK_FORMAT_R12X4_UNORM_PACK16_KHR"/>
-                 <enum offset="18" extends="VkFormat"                      name="VK_FORMAT_R12X4G12X4_UNORM_2PACK16_KHR"/>
-                 <enum offset="19" extends="VkFormat"                      name="VK_FORMAT_R12X4G12X4B12X4A12X4_UNORM_4PACK16_KHR"/>
-                 <enum offset="20" extends="VkFormat"                      name="VK_FORMAT_G12X4B12X4G12X4R12X4_422_UNORM_4PACK16_KHR"/>
-                 <enum offset="21" extends="VkFormat"                      name="VK_FORMAT_B12X4G12X4R12X4G12X4_422_UNORM_4PACK16_KHR"/>
-                 <enum offset="22" extends="VkFormat"                      name="VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_420_UNORM_3PACK16_KHR"/>
-                 <enum offset="23" extends="VkFormat"                      name="VK_FORMAT_G12X4_B12X4R12X4_2PLANE_420_UNORM_3PACK16_KHR"/>
-                 <enum offset="24" extends="VkFormat"                      name="VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_422_UNORM_3PACK16_KHR"/>
-                 <enum offset="25" extends="VkFormat"                      name="VK_FORMAT_G12X4_B12X4R12X4_2PLANE_422_UNORM_3PACK16_KHR"/>
-                 <enum offset="26" extends="VkFormat"                      name="VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_444_UNORM_3PACK16_KHR"/>
-                 <enum offset="27" extends="VkFormat"                      name="VK_FORMAT_G16B16G16R16_422_UNORM_KHR"/>
-                 <enum offset="28" extends="VkFormat"                      name="VK_FORMAT_B16G16R16G16_422_UNORM_KHR"/>
-                 <enum offset="29" extends="VkFormat"                      name="VK_FORMAT_G16_B16_R16_3PLANE_420_UNORM_KHR"/>
-                 <enum offset="30" extends="VkFormat"                      name="VK_FORMAT_G16_B16R16_2PLANE_420_UNORM_KHR"/>
-                 <enum offset="31" extends="VkFormat"                      name="VK_FORMAT_G16_B16_R16_3PLANE_422_UNORM_KHR"/>
-                 <enum offset="32" extends="VkFormat"                      name="VK_FORMAT_G16_B16R16_2PLANE_422_UNORM_KHR"/>
-                 <enum offset="33" extends="VkFormat"                      name="VK_FORMAT_G16_B16_R16_3PLANE_444_UNORM_KHR"/>
-                 <enum bitpos="4"  extends="VkImageAspectFlagBits"         name="VK_IMAGE_ASPECT_PLANE_0_BIT_KHR"/>
-                 <enum bitpos="5"  extends="VkImageAspectFlagBits"         name="VK_IMAGE_ASPECT_PLANE_1_BIT_KHR"/>
-                 <enum bitpos="6"  extends="VkImageAspectFlagBits"         name="VK_IMAGE_ASPECT_PLANE_2_BIT_KHR"/>
-                 <enum bitpos="9"  extends="VkImageCreateFlagBits"         name="VK_IMAGE_CREATE_DISJOINT_BIT_KHR"/>
-                 <enum bitpos="17" extends="VkFormatFeatureFlagBits"       name="VK_FORMAT_FEATURE_MIDPOINT_CHROMA_SAMPLES_BIT_KHR" comment="Format can have midpoint rather than cosited chroma samples"/>
-                 <enum bitpos="18" extends="VkFormatFeatureFlagBits"       name="VK_FORMAT_FEATURE_SAMPLED_IMAGE_YCBCR_CONVERSION_LINEAR_FILTER_BIT_KHR" comment="Format can be used with linear filtering whilst color conversion is enabled"/>
-                 <enum bitpos="19" extends="VkFormatFeatureFlagBits"       name="VK_FORMAT_FEATURE_SAMPLED_IMAGE_YCBCR_CONVERSION_SEPARATE_RECONSTRUCTION_FILTER_BIT_KHR" comment="Format can have different chroma, min and mag filters"/>
-                 <enum bitpos="20" extends="VkFormatFeatureFlagBits"       name="VK_FORMAT_FEATURE_SAMPLED_IMAGE_YCBCR_CONVERSION_CHROMA_RECONSTRUCTION_EXPLICIT_BIT_KHR"/>
-                 <enum bitpos="21" extends="VkFormatFeatureFlagBits"       name="VK_FORMAT_FEATURE_SAMPLED_IMAGE_YCBCR_CONVERSION_CHROMA_RECONSTRUCTION_EXPLICIT_FORCEABLE_BIT_KHR"/>
-                 <enum bitpos="22" extends="VkFormatFeatureFlagBits"       name="VK_FORMAT_FEATURE_DISJOINT_BIT_KHR" comment="Format supports disjoint planes"/>
-                 <enum bitpos="23" extends="VkFormatFeatureFlagBits"       name="VK_FORMAT_FEATURE_COSITED_CHROMA_SAMPLES_BIT_KHR" comment="Format can have cosited rather than midpoint chroma samples"/>
-                 <type name="VkSamplerYcbcrConversionCreateInfoKHR"/>
-                 <type name="VkSamplerYcbcrConversionInfoKHR"/>
-                 <type name="VkBindImagePlaneMemoryInfoKHR"/>
-                 <type name="VkImagePlaneMemoryRequirementsInfoKHR"/>
-                 <type name="VkPhysicalDeviceSamplerYcbcrConversionFeaturesKHR"/>
-                 <type name="VkSamplerYcbcrConversionImageFormatPropertiesKHR"/>
-                 <command name="vkCreateSamplerYcbcrConversionKHR"/>
-                 <command name="vkDestroySamplerYcbcrConversionKHR"/>
+                <enum value="1"                                           name="VK_KHR_SAMPLER_YCBCR_CONVERSION_SPEC_VERSION"/>
+                <enum value="&quot;VK_KHR_sampler_ycbcr_conversion&quot;" name="VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME"/>
+                <enum offset="0" extends="VkStructureType"                name="VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_CREATE_INFO_KHR"/>
+                <enum offset="1" extends="VkStructureType"                name="VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_INFO_KHR"/>
+                <enum offset="2" extends="VkStructureType"                name="VK_STRUCTURE_TYPE_BIND_IMAGE_PLANE_MEMORY_INFO_KHR"/>
+                <enum offset="3" extends="VkStructureType"                name="VK_STRUCTURE_TYPE_IMAGE_PLANE_MEMORY_REQUIREMENTS_INFO_KHR"/>
+                <enum offset="4" extends="VkStructureType"                name="VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES_KHR"/>
+                <enum offset="5" extends="VkStructureType"                name="VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_IMAGE_FORMAT_PROPERTIES_KHR"/>
+                <enum offset="0" extends="VkDebugReportObjectTypeEXT"     name="VK_DEBUG_REPORT_OBJECT_TYPE_SAMPLER_YCBCR_CONVERSION_KHR_EXT"/>
+                <enum offset="0" extends="VkObjectType"                   name="VK_OBJECT_TYPE_SAMPLER_YCBCR_CONVERSION_KHR"/>
+                <enum offset="0" extends="VkFormat"                       name="VK_FORMAT_G8B8G8R8_422_UNORM_KHR"/>
+                <enum offset="1" extends="VkFormat"                       name="VK_FORMAT_B8G8R8G8_422_UNORM_KHR"/>
+                <enum offset="2" extends="VkFormat"                       name="VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM_KHR"/>
+                <enum offset="3" extends="VkFormat"                       name="VK_FORMAT_G8_B8R8_2PLANE_420_UNORM_KHR"/>
+                <enum offset="4" extends="VkFormat"                       name="VK_FORMAT_G8_B8_R8_3PLANE_422_UNORM_KHR"/>
+                <enum offset="5" extends="VkFormat"                       name="VK_FORMAT_G8_B8R8_2PLANE_422_UNORM_KHR"/>
+                <enum offset="6" extends="VkFormat"                       name="VK_FORMAT_G8_B8_R8_3PLANE_444_UNORM_KHR"/>
+                <enum offset="7" extends="VkFormat"                       name="VK_FORMAT_R10X6_UNORM_PACK16_KHR"/>
+                <enum offset="8" extends="VkFormat"                       name="VK_FORMAT_R10X6G10X6_UNORM_2PACK16_KHR"/>
+                <enum offset="9" extends="VkFormat"                       name="VK_FORMAT_R10X6G10X6B10X6A10X6_UNORM_4PACK16_KHR"/>
+                <enum offset="10" extends="VkFormat"                      name="VK_FORMAT_G10X6B10X6G10X6R10X6_422_UNORM_4PACK16_KHR"/>
+                <enum offset="11" extends="VkFormat"                      name="VK_FORMAT_B10X6G10X6R10X6G10X6_422_UNORM_4PACK16_KHR"/>
+                <enum offset="12" extends="VkFormat"                      name="VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_420_UNORM_3PACK16_KHR"/>
+                <enum offset="13" extends="VkFormat"                      name="VK_FORMAT_G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16_KHR"/>
+                <enum offset="14" extends="VkFormat"                      name="VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_422_UNORM_3PACK16_KHR"/>
+                <enum offset="15" extends="VkFormat"                      name="VK_FORMAT_G10X6_B10X6R10X6_2PLANE_422_UNORM_3PACK16_KHR"/>
+                <enum offset="16" extends="VkFormat"                      name="VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_444_UNORM_3PACK16_KHR"/>
+                <enum offset="17" extends="VkFormat"                      name="VK_FORMAT_R12X4_UNORM_PACK16_KHR"/>
+                <enum offset="18" extends="VkFormat"                      name="VK_FORMAT_R12X4G12X4_UNORM_2PACK16_KHR"/>
+                <enum offset="19" extends="VkFormat"                      name="VK_FORMAT_R12X4G12X4B12X4A12X4_UNORM_4PACK16_KHR"/>
+                <enum offset="20" extends="VkFormat"                      name="VK_FORMAT_G12X4B12X4G12X4R12X4_422_UNORM_4PACK16_KHR"/>
+                <enum offset="21" extends="VkFormat"                      name="VK_FORMAT_B12X4G12X4R12X4G12X4_422_UNORM_4PACK16_KHR"/>
+                <enum offset="22" extends="VkFormat"                      name="VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_420_UNORM_3PACK16_KHR"/>
+                <enum offset="23" extends="VkFormat"                      name="VK_FORMAT_G12X4_B12X4R12X4_2PLANE_420_UNORM_3PACK16_KHR"/>
+                <enum offset="24" extends="VkFormat"                      name="VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_422_UNORM_3PACK16_KHR"/>
+                <enum offset="25" extends="VkFormat"                      name="VK_FORMAT_G12X4_B12X4R12X4_2PLANE_422_UNORM_3PACK16_KHR"/>
+                <enum offset="26" extends="VkFormat"                      name="VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_444_UNORM_3PACK16_KHR"/>
+                <enum offset="27" extends="VkFormat"                      name="VK_FORMAT_G16B16G16R16_422_UNORM_KHR"/>
+                <enum offset="28" extends="VkFormat"                      name="VK_FORMAT_B16G16R16G16_422_UNORM_KHR"/>
+                <enum offset="29" extends="VkFormat"                      name="VK_FORMAT_G16_B16_R16_3PLANE_420_UNORM_KHR"/>
+                <enum offset="30" extends="VkFormat"                      name="VK_FORMAT_G16_B16R16_2PLANE_420_UNORM_KHR"/>
+                <enum offset="31" extends="VkFormat"                      name="VK_FORMAT_G16_B16_R16_3PLANE_422_UNORM_KHR"/>
+                <enum offset="32" extends="VkFormat"                      name="VK_FORMAT_G16_B16R16_2PLANE_422_UNORM_KHR"/>
+                <enum offset="33" extends="VkFormat"                      name="VK_FORMAT_G16_B16_R16_3PLANE_444_UNORM_KHR"/>
+                <enum bitpos="4"  extends="VkImageAspectFlagBits"         name="VK_IMAGE_ASPECT_PLANE_0_BIT_KHR"/>
+                <enum bitpos="5"  extends="VkImageAspectFlagBits"         name="VK_IMAGE_ASPECT_PLANE_1_BIT_KHR"/>
+                <enum bitpos="6"  extends="VkImageAspectFlagBits"         name="VK_IMAGE_ASPECT_PLANE_2_BIT_KHR"/>
+                <enum bitpos="9"  extends="VkImageCreateFlagBits"         name="VK_IMAGE_CREATE_DISJOINT_BIT_KHR"/>
+                <enum bitpos="17" extends="VkFormatFeatureFlagBits"       name="VK_FORMAT_FEATURE_MIDPOINT_CHROMA_SAMPLES_BIT_KHR" comment="Format can have midpoint rather than cosited chroma samples"/>
+                <enum bitpos="18" extends="VkFormatFeatureFlagBits"       name="VK_FORMAT_FEATURE_SAMPLED_IMAGE_YCBCR_CONVERSION_LINEAR_FILTER_BIT_KHR" comment="Format can be used with linear filtering whilst color conversion is enabled"/>
+                <enum bitpos="19" extends="VkFormatFeatureFlagBits"       name="VK_FORMAT_FEATURE_SAMPLED_IMAGE_YCBCR_CONVERSION_SEPARATE_RECONSTRUCTION_FILTER_BIT_KHR" comment="Format can have different chroma, min and mag filters"/>
+                <enum bitpos="20" extends="VkFormatFeatureFlagBits"       name="VK_FORMAT_FEATURE_SAMPLED_IMAGE_YCBCR_CONVERSION_CHROMA_RECONSTRUCTION_EXPLICIT_BIT_KHR"/>
+                <enum bitpos="21" extends="VkFormatFeatureFlagBits"       name="VK_FORMAT_FEATURE_SAMPLED_IMAGE_YCBCR_CONVERSION_CHROMA_RECONSTRUCTION_EXPLICIT_FORCEABLE_BIT_KHR"/>
+                <enum bitpos="22" extends="VkFormatFeatureFlagBits"       name="VK_FORMAT_FEATURE_DISJOINT_BIT_KHR" comment="Format supports disjoint planes"/>
+                <enum bitpos="23" extends="VkFormatFeatureFlagBits"       name="VK_FORMAT_FEATURE_COSITED_CHROMA_SAMPLES_BIT_KHR" comment="Format can have cosited rather than midpoint chroma samples"/>
+                <type name="VkSamplerYcbcrConversionCreateInfoKHR"/>
+                <type name="VkSamplerYcbcrConversionInfoKHR"/>
+                <type name="VkBindImagePlaneMemoryInfoKHR"/>
+                <type name="VkImagePlaneMemoryRequirementsInfoKHR"/>
+                <type name="VkPhysicalDeviceSamplerYcbcrConversionFeaturesKHR"/>
+                <type name="VkSamplerYcbcrConversionImageFormatPropertiesKHR"/>
+                <command name="vkCreateSamplerYcbcrConversionKHR"/>
+                <command name="vkDestroySamplerYcbcrConversionKHR"/>
             </require>
         </extension>
         <extension name="VK_KHR_bind_memory2" number="158" type="device" author="KHR" contact="Tobias Hector @tobias" supported="vulkan">
@@ -7312,6 +7496,54 @@ private version is maintained in the 1.0 branch of the member gitlab server.
             <require>
                 <enum value="0"                                          name="VK_EXT_EXTENSION_170_SPEC_VERSION"/>
                 <enum value="&quot;VK_EXT_extension_170&quot;"           name="VK_EXT_EXTENSION_170_EXTENSION_NAME"/>
+            </require>
+        </extension>
+      <extension name="VK_QCOM_extension_171" number="171" author="QCOM" contact="Bill Licea-Kane @billl" supported="disabled">
+            <require>
+                <enum value="0"                                          name="VK_QCOM_extension_171_SPEC_VERSION"/>
+                <enum value="&quot;VK_QCOM_extension_171&quot;"          name="VK_QCOM_extension_171_EXTENSION_NAME"/>
+            </require>
+      </extension>
+      <extension name="VK_QCOM_extension_172" number="172" author="QCOM" contact="Bill Licea-Kane @billl" supported="disabled">
+            <require>
+                <enum value="0"                                          name="VK_QCOM_extension_172_SPEC_VERSION"/>
+                <enum value="&quot;VK_QCOM_extension_172&quot;"          name="VK_QCOM_extension_172_EXTENSION_NAME"/>
+            </require>
+      </extension>
+      <extension name="VK_QCOM_extension_173" number="173" author="QCOM" contact="Bill Licea-Kane @billl" supported="disabled">
+            <require>
+                <enum value="0"                                          name="VK_QCOM_extension_173_SPEC_VERSION"/>
+                <enum value="&quot;VK_QCOM_extension_173&quot;"          name="VK_QCOM_extension_173_EXTENSION_NAME"/>
+            </require>
+      </extension>
+      <extension name="VK_QCOM_extension_174" number="174" author="QCOM" contact="Bill Licea-Kane @billl" supported="disabled">
+            <require>
+                <enum value="0"                                          name="VK_QCOM_extension_174_SPEC_VERSION"/>
+                <enum value="&quot;VK_QCOM_extension_174&quot;"          name="VK_QCOM_extension_174_EXTENSION_NAME"/>
+            </require>
+      </extension>
+        <extension name="VK_EXT_extension_175" number="175" author="EXT" contact="Andres Rodriguez @lostgoat" supported="disabled">
+            <require>
+                <enum value="0"                                          name="VK_KHR_EXTENSION_175_SPEC_VERSION"/>
+                <enum value="&quot;VK_KHR_extension_175&quot;"           name="VK_KHR_EXTENSION_175_EXTENSION_NAME"/>
+            </require>
+        </extension>
+        <extension name="VK_EXT_extension_176" number="176" author="EXT" contact="Neil Henning @neil_henning" supported="disabled">
+            <require>
+                <enum value="0"                                          name="VK_KHR_EXTENSION_176_SPEC_VERSION"/>
+                <enum value="&quot;VK_KHR_extension_176&quot;"           name="VK_KHR_EXTENSION_176_EXTENSION_NAME"/>
+            </require>
+        </extension>
+        <extension name="VK_EXT_extension_177" number="177" author="EXT" contact="Neil Henning @neil_henning" supported="disabled">
+            <require>
+                <enum value="0"                                          name="VK_KHR_EXTENSION_177_SPEC_VERSION"/>
+                <enum value="&quot;VK_KHR_extension_177&quot;"           name="VK_KHR_EXTENSION_177_EXTENSION_NAME"/>
+            </require>
+        </extension>
+       <extension name="VK_EXT_extension_178" number="178" author="EXT" contact="Alexander Galazin @debater" supported="disabled">
+            <require>
+                <enum value="0"                                          name="VK_KHR_EXTENSION_178_SPEC_VERSION"/>
+                <enum value="&quot;VK_KHR_extension_178&quot;"           name="VK_KHR_EXTENSION_178_EXTENSION_NAME"/>
             </require>
         </extension>
     </extensions>

@@ -571,6 +571,11 @@ func_struct_id_map = {
 'VkPhysicalDeviceSamplerYcbcrConversionFeaturesKHR' : 515,
 'VkSamplerYcbcrConversionImageFormatPropertiesKHR' : 516,
 'VkSamplerYcbcrConversionInfoKHR' : 517,
+'VkDebugUtilsLabelEXT' : 518,
+'VkDebugUtilsObjectNameInfoEXT' : 519,
+'VkDebugUtilsObjectTagInfoEXT' : 520,
+'VkDebugUtilsMessengerCreateInfoEXT' : 521,
+'VkDebugUtilsMessengerCallbackDataEXT' : 522,
 ### ADD New func/struct mappings above this line
 }
 # Mapping of params to unique IDs
@@ -1075,6 +1080,8 @@ implicit_param_map = {
 'ycbcrConversion' : 497,
 'pViewFormats' : 498,
 'conversion' : 499,
+'messageSeverity' : 500,
+'messageType' : 501,
 ### ADD New implicit param mappings above this line
 }
 
