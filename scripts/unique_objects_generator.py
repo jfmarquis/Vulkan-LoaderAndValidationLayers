@@ -150,6 +150,8 @@ class UniqueObjectsOutputGenerator(OutputGenerator):
             'vkGetPhysicalDeviceDisplayProperties2KHR',
             'vkGetPhysicalDeviceDisplayPlaneProperties2KHR',
             'vkGetDisplayModeProperties2KHR',
+            'vkSetDebugUtilsObjectNameEXT',
+            'vkSetDebugUtilsObjectTagEXT',
             ]
         # Commands shadowed by interface functions and are not implemented
         self.interface_functions = [
@@ -158,10 +160,14 @@ class UniqueObjectsOutputGenerator(OutputGenerator):
             'vkGetDisplayPlaneSupportedDisplaysKHR',
             'vkGetDisplayModePropertiesKHR',
             'vkGetDisplayPlaneCapabilitiesKHR',
-            # DebugReport APIs are hooked, but handled separately in the source file
+            # VK_EXT_debug_report APIs are hooked, but handled separately in the source file
             'vkCreateDebugReportCallbackEXT',
             'vkDestroyDebugReportCallbackEXT',
             'vkDebugReportMessageEXT',
+            # VK_EXT_debug_utils APIs are hooked, but handled separately in the source file
+            'vkCreateDebugUtilsMessengerEXT',
+            'vkDestroyDebugUtilsMessengerEXT',
+            'vkSubmitDebugUtilsMessageEXT',
             ]
         self.headerVersion = None
         # Internal state - accumulators for different inner block text

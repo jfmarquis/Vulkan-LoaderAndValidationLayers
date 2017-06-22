@@ -576,6 +576,15 @@ func_struct_id_map = {
 'VkDebugUtilsObjectTagInfoEXT' : 520,
 'VkDebugUtilsMessengerCreateInfoEXT' : 521,
 'VkDebugUtilsMessengerCallbackDataEXT' : 522,
+'vkQueueBeginDebugUtilsLabelEXT' : 523,
+'vkQueueEndDebugUtilsLabelEXT' : 524,
+'vkQueueInsertDebugUtilsLabelEXT' : 525,
+'vkCmdBeginDebugUtilsLabelEXT' : 526,
+'vkCmdEndDebugUtilsLabelEXT' : 527,
+'vkCmdInsertDebugUtilsLabelEXT' : 528,
+'vkCreateDebugUtilsMessengerEXT' : 529,
+'vkDestroyDebugUtilsMessengerEXT' : 530,
+'vkSubmitDebugUtilsMessageEXT' : 531,
 ### ADD New func/struct mappings above this line
 }
 # Mapping of params to unique IDs
@@ -1080,8 +1089,25 @@ implicit_param_map = {
 'ycbcrConversion' : 497,
 'pViewFormats' : 498,
 'conversion' : 499,
-'messageSeverity' : 500,
-'messageType' : 501,
+'sampleLocationGridSize': 500,
+'attachmentIndex': 501,
+'subpassIndex': 502,
+'pPostSubpassSampleLocations': 503,
+'sampleLocationsEnable': 504,
+'maxSampleLocationGridSize': 505,
+'sampleLocationCoordinateRange': 506,
+'sampleLocationSubPixelBits': 507,
+'variableSampleLocations': 508,
+'messageSeverity' : 509,
+'messageType' : 510,
+'messageTypes' : 511,
+'pLabelName' : 512,
+'pMessageIdName' : 513,
+'messageIdNumber' : 514,
+'pfnUserCallback' : 515,
+'pCallbackData' : 516,
+'pUserData' : 517,
+'pMessenger' : 518,
 ### ADD New implicit param mappings above this line
 }
 
@@ -1090,7 +1116,7 @@ uniqueid_set = set() # store uniqueid to make sure we don't have duplicates
 # Convert a string VUID into numerical value
 #  See "VUID Mapping Details" comment above for more info
 def convertVUID(vuid_string):
-    """Convert a string-based VUID into a numberical value"""
+    """Convert a string-based VUID into a numerical value"""
     #func_struct_update = False
     #imp_param_update = False
     if vuid_string in ['', None]:

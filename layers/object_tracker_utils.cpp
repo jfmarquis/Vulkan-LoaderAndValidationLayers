@@ -32,7 +32,8 @@ uint64_t object_track_index = 0;
 uint32_t loader_layer_if_version = CURRENT_LOADER_LAYER_INTERFACE_VERSION;
 
 void InitObjectTracker(layer_data *my_data, const VkAllocationCallbacks *pAllocator) {
-    layer_debug_actions(my_data->report_data, my_data->logging_callback, pAllocator, "lunarg_object_tracker");
+    layer_debug_report_actions(my_data->report_data, my_data->logging_callback, pAllocator, "lunarg_object_tracker");
+    layer_debug_messenger_actions(my_data->report_data, my_data->logging_messenger, pAllocator, "lunarg_object_tracker");
 }
 
 // Add new queue to head of global queue list
@@ -290,12 +291,13 @@ VKAPI_ATTR void VKAPI_CALL DestroyInstance(VkInstance instance, const VkAllocati
     layer_data *instance_data = GetLayerDataPtr(key, layer_data_map);
 
     // Enable the temporary callback(s) here to catch cleanup issues:
-    bool callback_setup = false;
-    if (instance_data->num_tmp_callbacks > 0) {
-        if (!layer_enable_tmp_callbacks(instance_data->report_data, instance_data->num_tmp_callbacks,
-                                        instance_data->tmp_dbg_create_infos, instance_data->tmp_callbacks)) {
-            callback_setup = true;
-        }
+    if (instance_data->num_tmp_debug_messengers > 0) {
+        layer_enable_tmp_debug_messengers(instance_data->report_data, instance_data->num_tmp_debug_messengers,
+                                          instance_data->tmp_messenger_create_infos, instance_data->tmp_debug_messengers);
+    }
+    if (instance_data->num_tmp_report_callbacks > 0) {
+        layer_enable_tmp_report_callbacks(instance_data->report_data, instance_data->num_tmp_report_callbacks,
+                                          instance_data->tmp_report_create_infos, instance_data->tmp_report_callbacks);
     }
 
     // TODO: The instance handle can not be validated here. The loader will likely have to validate it.
@@ -334,22 +336,32 @@ VKAPI_ATTR void VKAPI_CALL DestroyInstance(VkInstance instance, const VkAllocati
     pInstanceTable->DestroyInstance(instance, pAllocator);
 
     // Disable and cleanup the temporary callback(s):
-    if (callback_setup) {
-        layer_disable_tmp_callbacks(instance_data->report_data, instance_data->num_tmp_callbacks, instance_data->tmp_callbacks);
+    layer_disable_tmp_debug_messengers(instance_data->report_data, instance_data->num_tmp_debug_messengers,
+                                       instance_data->tmp_debug_messengers);
+    layer_disable_tmp_report_callbacks(instance_data->report_data, instance_data->num_tmp_report_callbacks,
+                                       instance_data->tmp_report_callbacks);
+    if (instance_data->num_tmp_debug_messengers > 0) {
+        layer_free_tmp_debug_messengers(instance_data->tmp_messenger_create_infos, instance_data->tmp_debug_messengers);
+        instance_data->num_tmp_debug_messengers = 0;
     }
-    if (instance_data->num_tmp_callbacks > 0) {
-        layer_free_tmp_callbacks(instance_data->tmp_dbg_create_infos, instance_data->tmp_callbacks);
-        instance_data->num_tmp_callbacks = 0;
+    if (instance_data->num_tmp_report_callbacks > 0) {
+        layer_free_tmp_report_callbacks(instance_data->tmp_report_create_infos, instance_data->tmp_report_callbacks);
+        instance_data->num_tmp_report_callbacks = 0;
     }
 
     // Clean up logging callback, if any
+    while (instance_data->logging_messenger.size() > 0) {
+        VkDebugUtilsMessengerEXT messenger = instance_data->logging_messenger.back();
+        layer_destroy_messenger_callback(instance_data->report_data, messenger, pAllocator);
+        instance_data->logging_messenger.pop_back();
+    }
     while (instance_data->logging_callback.size() > 0) {
         VkDebugReportCallbackEXT callback = instance_data->logging_callback.back();
-        layer_destroy_msg_callback(instance_data->report_data, callback, pAllocator);
+        layer_destroy_report_callback(instance_data->report_data, callback, pAllocator);
         instance_data->logging_callback.pop_back();
     }
 
-    layer_debug_report_destroy_instance(instance_data->report_data);
+    layer_debug_utils_destroy_instance(instance_data->report_data);
     FreeLayerDataPtr(key, layer_data_map);
 
     lock.unlock();
@@ -561,7 +573,7 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateDebugReportCallbackEXT(VkInstance instance,
     VkResult result = pInstanceTable->CreateDebugReportCallbackEXT(instance, pCreateInfo, pAllocator, pCallback);
     if (VK_SUCCESS == result) {
         layer_data *instance_data = GetLayerDataPtr(get_dispatch_key(instance), layer_data_map);
-        result = layer_create_msg_callback(instance_data->report_data, false, pCreateInfo, pAllocator, pCallback);
+        result = layer_create_report_callback(instance_data->report_data, false, pCreateInfo, pAllocator, pCallback);
         CreateObject(instance, *pCallback, kVulkanObjectTypeDebugReportCallbackEXT, pAllocator);
     }
     return result;
@@ -572,7 +584,7 @@ VKAPI_ATTR void VKAPI_CALL DestroyDebugReportCallbackEXT(VkInstance instance, Vk
     VkLayerInstanceDispatchTable *pInstanceTable = get_dispatch_table(ot_instance_table_map, instance);
     pInstanceTable->DestroyDebugReportCallbackEXT(instance, msgCallback, pAllocator);
     layer_data *instance_data = GetLayerDataPtr(get_dispatch_key(instance), layer_data_map);
-    layer_destroy_msg_callback(instance_data->report_data, msgCallback, pAllocator);
+    layer_destroy_report_callback(instance_data->report_data, msgCallback, pAllocator);
     DestroyObject(instance, msgCallback, kVulkanObjectTypeDebugReportCallbackEXT, pAllocator, VALIDATION_ERROR_242009b4,
                   VALIDATION_ERROR_242009b6);
 }
@@ -584,7 +596,255 @@ VKAPI_ATTR void VKAPI_CALL DebugReportMessageEXT(VkInstance instance, VkDebugRep
     pInstanceTable->DebugReportMessageEXT(instance, flags, objType, object, location, msgCode, pLayerPrefix, pMsg);
 }
 
-static const VkExtensionProperties instance_extensions[] = {{VK_EXT_DEBUG_REPORT_EXTENSION_NAME, VK_EXT_DEBUG_REPORT_SPEC_VERSION}};
+// VK_EXT_debug_utils commands
+VKAPI_ATTR VkResult VKAPI_CALL SetDebugUtilsObjectNameEXT(VkDevice device, const VkDebugUtilsObjectNameInfoEXT *pNameInfo) {
+    bool skip = VK_FALSE;
+    std::unique_lock<std::mutex> lock(global_lock);
+    skip |= ValidateObject(device, device, kVulkanObjectTypeDevice, false, VALIDATION_ERROR_UNDEFINED, VALIDATION_ERROR_UNDEFINED);
+    lock.unlock();
+    if (skip) {
+        return VK_ERROR_VALIDATION_FAILED_EXT;
+    }
+    layer_data *dev_data = GetLayerDataPtr(get_dispatch_key(device), layer_data_map);
+    if (pNameInfo->pObjectName) {
+        dev_data->report_data->debugUtilsObjectNameMap->insert(
+            std::make_pair<uint64_t, std::string>((uint64_t &&) pNameInfo->objectHandle, pNameInfo->pObjectName));
+    } else {
+        dev_data->report_data->debugUtilsObjectNameMap->erase(pNameInfo->objectHandle);
+    }
+    VkResult result = dev_data->dispatch_table.SetDebugUtilsObjectNameEXT(device, pNameInfo);
+    return result;
+}
+
+VKAPI_ATTR VkResult VKAPI_CALL SetDebugUtilsObjectTagEXT(VkDevice device, const VkDebugUtilsObjectTagInfoEXT *pTagInfo) {
+    bool skip = VK_FALSE;
+    std::unique_lock<std::mutex> lock(global_lock);
+    skip |= ValidateObject(device, device, kVulkanObjectTypeDevice, false, VALIDATION_ERROR_UNDEFINED, VALIDATION_ERROR_UNDEFINED);
+    lock.unlock();
+    if (skip) {
+        return VK_ERROR_VALIDATION_FAILED_EXT;
+    }
+    layer_data *dev_data = GetLayerDataPtr(get_dispatch_key(device), layer_data_map);
+    VkResult result = dev_data->dispatch_table.SetDebugUtilsObjectTagEXT(device, pTagInfo);
+    return result;
+}
+
+VKAPI_ATTR void VKAPI_CALL QueueBeginDebugUtilsLabelEXT(VkQueue queue, const VkDebugUtilsLabelEXT *pLabelInfo) {
+    bool skip = VK_FALSE;
+    std::unique_lock<std::mutex> lock(global_lock);
+    skip |= ValidateObject(queue, queue, kVulkanObjectTypeQueue, false, VALIDATION_ERROR_UNDEFINED, VALIDATION_ERROR_UNDEFINED);
+    lock.unlock();
+    layer_data *dev_data = GetLayerDataPtr(get_dispatch_key(queue), layer_data_map);
+    if (!skip) {
+        if (nullptr != pLabelInfo && nullptr != pLabelInfo->pLabelName) {
+            auto label_iter = dev_data->report_data->debugUtilsQueueLabels->find(queue);
+            if (label_iter == dev_data->report_data->debugUtilsQueueLabels->end()) {
+                std::vector<LoggingLabelData> new_queue_labels;
+                InsertLabelIntoLog(pLabelInfo, new_queue_labels);
+                dev_data->report_data->debugUtilsQueueLabels->insert({queue, new_queue_labels});
+            } else {
+                // If the last thing was a label insert, we need to pop it off of the label vector before any
+                // changes. This is because a label added with "vkQueueInsertDebugUtilsLabelEXT" is only a
+                // temporary location that exists until the next operation occurs.  In this case, a new
+                // "vkQueueBeginDebugUtilsLabelEXT" has occurred erasing the previous inserted label.
+                if (dev_data->report_data->queueLabelHasInsert) {
+                    dev_data->report_data->queueLabelHasInsert = false;
+                    label_iter->second.pop_back();
+                }
+                InsertLabelIntoLog(pLabelInfo, label_iter->second);
+            }
+        }
+        if (dev_data->dispatch_table.QueueBeginDebugUtilsLabelEXT) {
+            dev_data->dispatch_table.QueueBeginDebugUtilsLabelEXT(queue, pLabelInfo);
+        }
+    }
+}
+
+VKAPI_ATTR void VKAPI_CALL QueueEndDebugUtilsLabelEXT(VkQueue queue) {
+    bool skip = VK_FALSE;
+    std::unique_lock<std::mutex> lock(global_lock);
+    skip |= ValidateObject(queue, queue, kVulkanObjectTypeQueue, false, VALIDATION_ERROR_UNDEFINED, VALIDATION_ERROR_UNDEFINED);
+    lock.unlock();
+    layer_data *dev_data = GetLayerDataPtr(get_dispatch_key(queue), layer_data_map);
+    if (!skip) {
+        if (dev_data->dispatch_table.QueueEndDebugUtilsLabelEXT) {
+            dev_data->dispatch_table.QueueEndDebugUtilsLabelEXT(queue);
+        }
+        auto label_iter = dev_data->report_data->debugUtilsQueueLabels->find(queue);
+        if (label_iter != dev_data->report_data->debugUtilsQueueLabels->end()) {
+            // If the last thing was a label insert, we need to pop it off of the label vector before any
+            // changes. This is because a label added with "vkQueueInsertDebugUtilsLabelEXT" is only a
+            // temporary location that exists until the next operation occurs.  In this case, a new
+            // "vkQueueEndDebugUtilsLabelEXT" has occurred erasing the previous inserted label.
+            if (dev_data->report_data->queueLabelHasInsert) {
+                dev_data->report_data->queueLabelHasInsert = false;
+                label_iter->second.pop_back();
+            }
+            // Now pop the normal item
+            label_iter->second.pop_back();
+        }
+    }
+}
+
+VKAPI_ATTR void VKAPI_CALL QueueInsertDebugUtilsLabelEXT(VkQueue queue, const VkDebugUtilsLabelEXT *pLabelInfo) {
+    bool skip = VK_FALSE;
+    std::unique_lock<std::mutex> lock(global_lock);
+    skip |= ValidateObject(queue, queue, kVulkanObjectTypeQueue, false, VALIDATION_ERROR_UNDEFINED, VALIDATION_ERROR_UNDEFINED);
+    lock.unlock();
+    layer_data *dev_data = GetLayerDataPtr(get_dispatch_key(queue), layer_data_map);
+    if (!skip) {
+        if (nullptr != pLabelInfo && nullptr != pLabelInfo->pLabelName) {
+            auto label_iter = dev_data->report_data->debugUtilsQueueLabels->find(queue);
+            if (label_iter == dev_data->report_data->debugUtilsQueueLabels->end()) {
+                std::vector<LoggingLabelData> new_queue_labels;
+                InsertLabelIntoLog(pLabelInfo, new_queue_labels);
+                dev_data->report_data->debugUtilsQueueLabels->insert({queue, new_queue_labels});
+            } else {
+                // If the last thing was a label insert, we need to pop it off of the label vector before any
+                // changes. This is because a label added with "vkQueueInsertDebugUtilsLabelEXT" is only a
+                // temporary location that exists until the next operation occurs.  In this case, a new
+                // "vkQueueInsertDebugUtilsLabelEXT" has occurred erasing the previous inserted label.
+                if (dev_data->report_data->queueLabelHasInsert) {
+                    label_iter->second.pop_back();
+                }
+                // Insert this new label and mark it as one that has been "inserted" so we can remove it on
+                // the next queue label operation.
+                InsertLabelIntoLog(pLabelInfo, label_iter->second);
+                dev_data->report_data->queueLabelHasInsert = true;
+            }
+        }
+        if (dev_data->dispatch_table.QueueInsertDebugUtilsLabelEXT) {
+            dev_data->dispatch_table.QueueInsertDebugUtilsLabelEXT(queue, pLabelInfo);
+        }
+    }
+}
+
+VKAPI_ATTR void VKAPI_CALL CmdBeginDebugUtilsLabelEXT(VkCommandBuffer commandBuffer, const VkDebugUtilsLabelEXT *pLabelInfo) {
+    bool skip = VK_FALSE;
+    std::unique_lock<std::mutex> lock(global_lock);
+    skip |= ValidateObject(commandBuffer, commandBuffer, kVulkanObjectTypeCommandBuffer, false, VALIDATION_ERROR_UNDEFINED,
+                           VALIDATION_ERROR_UNDEFINED);
+    lock.unlock();
+    layer_data *dev_data = GetLayerDataPtr(get_dispatch_key(commandBuffer), layer_data_map);
+    if (!skip) {
+        if (nullptr != pLabelInfo && nullptr != pLabelInfo->pLabelName) {
+            auto label_iter = dev_data->report_data->debugUtilsCmdBufLabels->find(commandBuffer);
+            if (label_iter == dev_data->report_data->debugUtilsCmdBufLabels->end()) {
+                std::vector<LoggingLabelData> new_cmdbuf_labels;
+                InsertLabelIntoLog(pLabelInfo, new_cmdbuf_labels);
+                dev_data->report_data->debugUtilsCmdBufLabels->insert({commandBuffer, new_cmdbuf_labels});
+            } else {
+                // If the last thing was a label insert, we need to pop it off of the label vector before any
+                // changes. This is because a label added with "vkCmdInsertDebugUtilsLabelEXT" is only a
+                // temporary location that exists until the next operation occurs.  In this case, a new
+                // "vkCmdBeginDebugUtilsLabelEXT" has occurred erasing the previous inserted label.
+                if (dev_data->report_data->cmdBufLabelHasInsert) {
+                    dev_data->report_data->cmdBufLabelHasInsert = false;
+                    label_iter->second.pop_back();
+                }
+                InsertLabelIntoLog(pLabelInfo, label_iter->second);
+            }
+        }
+        if (dev_data->dispatch_table.CmdBeginDebugUtilsLabelEXT) {
+            dev_data->dispatch_table.CmdBeginDebugUtilsLabelEXT(commandBuffer, pLabelInfo);
+        }
+    }
+}
+
+VKAPI_ATTR void VKAPI_CALL CmdEndDebugUtilsLabelEXT(VkCommandBuffer commandBuffer) {
+    bool skip = VK_FALSE;
+    std::unique_lock<std::mutex> lock(global_lock);
+    skip |= ValidateObject(commandBuffer, commandBuffer, kVulkanObjectTypeCommandBuffer, false, VALIDATION_ERROR_UNDEFINED,
+                           VALIDATION_ERROR_UNDEFINED);
+    lock.unlock();
+    layer_data *dev_data = GetLayerDataPtr(get_dispatch_key(commandBuffer), layer_data_map);
+    if (!skip) {
+        if (dev_data->dispatch_table.CmdEndDebugUtilsLabelEXT) {
+            dev_data->dispatch_table.CmdEndDebugUtilsLabelEXT(commandBuffer);
+        }
+        auto label_iter = dev_data->report_data->debugUtilsCmdBufLabels->find(commandBuffer);
+        if (label_iter != dev_data->report_data->debugUtilsCmdBufLabels->end()) {
+            // If the last thing was a label insert, we need to pop it off of the label vector before any
+            // changes. This is because a label added with "vkCmdInsertDebugUtilsLabelEXT" is only a
+            // temporary location that exists until the next operation occurs.  In this case, a new
+            // "vkCmdEndDebugUtilsLabelEXT" has occurred erasing the previous inserted label.
+            if (dev_data->report_data->cmdBufLabelHasInsert) {
+                dev_data->report_data->cmdBufLabelHasInsert = false;
+                label_iter->second.pop_back();
+            }
+            // Now pop the normal item
+            label_iter->second.pop_back();
+        }
+    }
+}
+
+VKAPI_ATTR void VKAPI_CALL CmdInsertDebugUtilsLabelEXT(VkCommandBuffer commandBuffer, const VkDebugUtilsLabelEXT *pLabelInfo) {
+    bool skip = VK_FALSE;
+    std::unique_lock<std::mutex> lock(global_lock);
+    skip |= ValidateObject(commandBuffer, commandBuffer, kVulkanObjectTypeCommandBuffer, false, VALIDATION_ERROR_UNDEFINED,
+                           VALIDATION_ERROR_UNDEFINED);
+    lock.unlock();
+    layer_data *dev_data = GetLayerDataPtr(get_dispatch_key(commandBuffer), layer_data_map);
+    if (!skip) {
+        if (nullptr != pLabelInfo && nullptr != pLabelInfo->pLabelName) {
+            auto label_iter = dev_data->report_data->debugUtilsCmdBufLabels->find(commandBuffer);
+            if (label_iter == dev_data->report_data->debugUtilsCmdBufLabels->end()) {
+                std::vector<LoggingLabelData> new_cmdbuf_labels;
+                InsertLabelIntoLog(pLabelInfo, new_cmdbuf_labels);
+                dev_data->report_data->debugUtilsCmdBufLabels->insert({commandBuffer, new_cmdbuf_labels});
+            } else {
+                // If the last thing was a label insert, we need to pop it off of the label vector before any
+                // changes. This is because a label added with "vkCmdInsertDebugUtilsLabelEXT" is only a
+                // temporary location that exists until the next operation occurs.  In this case, a new
+                // "vkCmdInsertDebugUtilsLabelEXT" has occurred erasing the previous inserted label.
+                if (dev_data->report_data->cmdBufLabelHasInsert) {
+                    label_iter->second.pop_back();
+                }
+                // Insert this new label and mark it as one that has been "inserted" so we can remove it on
+                // the next command buffer label operation.
+                InsertLabelIntoLog(pLabelInfo, label_iter->second);
+                dev_data->report_data->cmdBufLabelHasInsert = true;
+            }
+        }
+        if (dev_data->dispatch_table.CmdInsertDebugUtilsLabelEXT) {
+            dev_data->dispatch_table.CmdInsertDebugUtilsLabelEXT(commandBuffer, pLabelInfo);
+        }
+    }
+}
+
+VKAPI_ATTR VkResult VKAPI_CALL CreateDebugUtilsMessengerEXT(VkInstance instance,
+                                                            const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
+                                                            const VkAllocationCallbacks *pAllocator,
+                                                            VkDebugUtilsMessengerEXT *pMessenger) {
+    VkLayerInstanceDispatchTable *pInstanceTable = get_dispatch_table(ot_instance_table_map, instance);
+    VkResult result = pInstanceTable->CreateDebugUtilsMessengerEXT(instance, pCreateInfo, pAllocator, pMessenger);
+    if (VK_SUCCESS == result) {
+        layer_data *instance_data = GetLayerDataPtr(get_dispatch_key(instance), layer_data_map);
+        result = layer_create_messenger_callback(instance_data->report_data, false, pCreateInfo, pAllocator, pMessenger);
+        CreateObject(instance, *pMessenger, kVulkanObjectTypeDebugUtilsMessengerEXT, pAllocator);
+    }
+    return result;
+}
+
+VKAPI_ATTR void VKAPI_CALL DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT messenger,
+                                                         const VkAllocationCallbacks *pAllocator) {
+    VkLayerInstanceDispatchTable *pInstanceTable = get_dispatch_table(ot_instance_table_map, instance);
+    pInstanceTable->DestroyDebugUtilsMessengerEXT(instance, messenger, pAllocator);
+    layer_data *instance_data = GetLayerDataPtr(get_dispatch_key(instance), layer_data_map);
+    layer_destroy_messenger_callback(instance_data->report_data, messenger, pAllocator);
+    DestroyObject(instance, messenger, kVulkanObjectTypeDebugUtilsMessengerEXT, pAllocator, VALIDATION_ERROR_UNDEFINED,
+                  VALIDATION_ERROR_UNDEFINED);
+}
+
+VKAPI_ATTR void VKAPI_CALL SubmitDebugUtilsMessageEXT(VkInstance instance, VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+                                                      VkDebugUtilsMessageTypeFlagsEXT messageTypes,
+                                                      const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData) {
+    VkLayerInstanceDispatchTable *pInstanceTable = get_dispatch_table(ot_instance_table_map, instance);
+    pInstanceTable->SubmitDebugUtilsMessageEXT(instance, messageSeverity, messageTypes, pCallbackData);
+}
+
+static const VkExtensionProperties instance_extensions[] = {{VK_EXT_DEBUG_REPORT_EXTENSION_NAME, VK_EXT_DEBUG_REPORT_SPEC_VERSION},
+                                                            {VK_EXT_DEBUG_UTILS_EXTENSION_NAME, VK_EXT_DEBUG_UTILS_SPEC_VERSION}};
 
 static const VkLayerProperties globalLayerProps = {"VK_LAYER_LUNARG_object_tracker",
                                                    VK_LAYER_API_VERSION,  // specVersion
@@ -645,7 +905,7 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateDevice(VkPhysicalDevice physicalDevice, con
     }
 
     layer_data *device_data = GetLayerDataPtr(get_dispatch_key(*pDevice), layer_data_map);
-    device_data->report_data = layer_debug_report_create_device(phy_dev_data->report_data, *pDevice);
+    device_data->report_data = layer_debug_utils_create_device(phy_dev_data->report_data, *pDevice);
     layer_init_device_dispatch_table(*pDevice, &device_data->dispatch_table, fpGetDeviceProcAddr);
 
     // Add link back to physDev
@@ -732,11 +992,13 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateInstance(const VkInstanceCreateInfo *pCreat
 
     // Look for one or more debug report create info structures, and copy the
     // callback(s) for each one found (for use by vkDestroyInstance)
-    layer_copy_tmp_callbacks(pCreateInfo->pNext, &instance_data->num_tmp_callbacks, &instance_data->tmp_dbg_create_infos,
-                             &instance_data->tmp_callbacks);
+    layer_copy_tmp_debug_messengers(pCreateInfo->pNext, &instance_data->num_tmp_debug_messengers,
+                                    &instance_data->tmp_messenger_create_infos, &instance_data->tmp_debug_messengers);
+    layer_copy_tmp_report_callbacks(pCreateInfo->pNext, &instance_data->num_tmp_report_callbacks,
+                                    &instance_data->tmp_report_create_infos, &instance_data->tmp_report_callbacks);
 
-    instance_data->report_data = debug_report_create_instance(pInstanceTable, *pInstance, pCreateInfo->enabledExtensionCount,
-                                                              pCreateInfo->ppEnabledExtensionNames);
+    instance_data->report_data = debug_utils_create_instance(pInstanceTable, *pInstance, pCreateInfo->enabledExtensionCount,
+                                                             pCreateInfo->ppEnabledExtensionNames);
 
     InitObjectTracker(instance_data, pAllocator);
 

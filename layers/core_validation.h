@@ -50,6 +50,7 @@
 #include "core_validation_types.h"
 #include "descriptor_sets.h"
 #include "vk_layer_logging.h"
+#include "vk_object_logging.h"
 #include "vulkan/vk_layer.h"
 #include <atomic>
 #include <functional>

@@ -660,6 +660,13 @@ class HelperFileOutputGenerator(OutputGenerator):
         object_types_header += '    kVulkanObjectTypeMax = %d,\n' % enum_num
         object_types_header += '} VulkanObjectType;\n\n'
 
+        # Output a struct used for tracking the object information for logging
+        object_types_header += '// Object Type structure used for logging\n'
+        object_types_header += 'struct VulkanObjectLogInfo {\n'
+        object_types_header += '    VulkanObjectType type;\n'
+        object_types_header += '    uint64_t handle;\n'
+        object_types_header += '};\n\n'
+
         # Output name string helper
         object_types_header += '// Array of object name strings for OBJECT_TYPE enum conversion\n'
         object_types_header += 'static const char * const object_string[kVulkanObjectTypeMax] = {\n'
@@ -673,6 +680,7 @@ class HelperFileOutputGenerator(OutputGenerator):
         object_types_header += '\n'
         object_types_header += '// Helper array to get Vulkan VK_EXT_debug_report object type enum from the internal layers version\n'
         object_types_header += 'const VkDebugReportObjectTypeEXT get_debug_report_enum[] = {\n'
+        object_types_header += '    VK_DEBUG_REPORT_OBJECT_TYPE_UNKNOWN_EXT, // kVulkanObjectTypeUnknown\n'
         for object_type in type_list:
             done = False
             search_type = object_type.replace("kVulkanObjectType", "").lower()
@@ -692,6 +700,7 @@ class HelperFileOutputGenerator(OutputGenerator):
         object_types_header += '\n'
         object_types_header += '// Helper array to get Official Vulkan VkObjectType enum from the internal layers version\n'
         object_types_header += 'const VkObjectType get_object_type_enum[] = {\n'
+        object_types_header += '    VK_OBJECT_TYPE_UNKNOWN, // kVulkanObjectTypeUnknown\n'
         for object_type in type_list:
             done = False
             search_type = object_type.replace("kVulkanObjectType", "").lower()
@@ -706,7 +715,106 @@ class HelperFileOutputGenerator(OutputGenerator):
                 object_types_header += '    VK_OBJECT_TYPE_UNKNOWN, // No Match\n'
         object_types_header += '};\n'
 
+        # Create a function to convert from VkDebugReportObjectTypeEXT to VkObjectType
+        object_types_header += '\n'
+        object_types_header += '// Helper function to convert from VkDebugReportObjectTypeEXT to VkObjectType\n'
+        object_types_header += 'static VkObjectType convertDebugReportObjectToCoreObject(VkDebugReportObjectTypeEXT debug_report_obj){\n'
+        object_types_header += '    if (debug_report_obj == VK_DEBUG_REPORT_OBJECT_TYPE_UNKNOWN_EXT) {\n'
+        object_types_header += '        return VK_OBJECT_TYPE_UNKNOWN;\n'
+        for core_object_type in self.core_object_types:
+            core_target_type = core_object_type.replace("VK_OBJECT_TYPE_", "").lower()
+            core_target_type = core_target_type.replace("_", "")
+            for dr_object_type in self.debug_report_object_types:
+                dr_target_type = dr_object_type.replace("VK_DEBUG_REPORT_OBJECT_TYPE_", "").lower()
+                dr_target_type = dr_target_type[:-4]
+                dr_target_type = dr_target_type.replace("_", "")
+                if core_target_type == dr_target_type:
+                    object_types_header += '    } else if (debug_report_obj == %s) {\n' % dr_object_type
+                    object_types_header += '        return %s;\n' % core_object_type
+                    break
+        object_types_header += '    }\n'
+        object_types_header += '    return VK_OBJECT_TYPE_UNKNOWN;\n'
+        object_types_header += '}\n'
+
+        # Create a function to convert from VkObjectType to VkDebugReportObjectTypeEXT
+        object_types_header += '\n'
+        object_types_header += '// Helper function to convert from VkDebugReportObjectTypeEXT to VkObjectType\n'
+        object_types_header += 'static VkDebugReportObjectTypeEXT convertCoreObjectToDebugReportObject(VkObjectType core_report_obj){\n'
+        object_types_header += '    if (core_report_obj == VK_OBJECT_TYPE_UNKNOWN) {\n'
+        object_types_header += '        return VK_DEBUG_REPORT_OBJECT_TYPE_UNKNOWN_EXT;\n'
+        for core_object_type in self.core_object_types:
+            core_target_type = core_object_type.replace("VK_OBJECT_TYPE_", "").lower()
+            core_target_type = core_target_type.replace("_", "")
+            for dr_object_type in self.debug_report_object_types:
+                dr_target_type = dr_object_type.replace("VK_DEBUG_REPORT_OBJECT_TYPE_", "").lower()
+                dr_target_type = dr_target_type[:-4]
+                dr_target_type = dr_target_type.replace("_", "")
+                if core_target_type == dr_target_type:
+                    object_types_header += '    } else if (core_report_obj == %s) {\n' % core_object_type
+                    object_types_header += '        return %s;\n' % dr_object_type
+                    break
+        object_types_header += '    }\n'
+        object_types_header += '    return VK_DEBUG_REPORT_OBJECT_TYPE_UNKNOWN_EXT;\n'
+        object_types_header += '}\n'
         return object_types_header
+    #
+    # Output object logging utility functions
+    def GenerateObjectLoggingHelperHeader(self):
+        object_logging_helper_header = '\n'
+        object_logging_helper_header += '#pragma once\n'
+        object_logging_helper_header += '\n'
+        object_logging_helper_header += '#include <vector>\n\n'
+        object_logging_helper_header += '#include <vulkan/vulkan.h>\n\n'
+
+        # Output functions to log each object type
+        object_logging_helper_header += '// Utility functions to insert appropriate data into the log object array from an object type and handle\n'
+        object_logging_helper_header += 'static std::vector<VulkanObjectLogInfo>& InsertObjectIntoLogVector(const VulkanObjectType &type, const uint64_t &handle,\n'
+        object_logging_helper_header += '                                                                   std::vector<VulkanObjectLogInfo> &log_objects) {\n'
+        object_logging_helper_header += '    if (VK_NULL_HANDLE != handle) {\n'
+        object_logging_helper_header += '        VulkanObjectLogInfo cur_object = {};\n'
+        object_logging_helper_header += '        bool in_list_already = false;\n'
+        object_logging_helper_header += '        for (uint32_t obj = 0; obj < log_objects.size(); ++obj) {\n'
+        object_logging_helper_header += '            if (log_objects[obj].type == type && log_objects[obj].handle == handle) {\n'
+        object_logging_helper_header += '                in_list_already = true;\n'
+        object_logging_helper_header += '                break;\n'
+        object_logging_helper_header += '            }\n'
+        object_logging_helper_header += '        }\n'
+        object_logging_helper_header += '        if (!in_list_already) {\n'
+        object_logging_helper_header += '            cur_object.type = type;\n'
+        object_logging_helper_header += '            cur_object.handle = handle;\n'
+        object_logging_helper_header += '            log_objects.push_back(cur_object);\n'
+        object_logging_helper_header += '        }\n'
+        object_logging_helper_header += '    }\n'
+        object_logging_helper_header += '    return log_objects;\n'
+        object_logging_helper_header += '}\n\n'
+
+        # Insert a utility function for each object type, just to make it easier to log things
+        for item in self.object_types:
+            type_object_name = 'kVulkanObjectType%s' % item[2:]
+            object_logging_helper_header += 'static inline uint64_t HandleToUint64(const %s &handle) {\n' % item
+            object_logging_helper_header += '    return reinterpret_cast<uint64_t>(handle);\n'
+            object_logging_helper_header += '}\n'
+            object_logging_helper_header += 'static std::vector<VulkanObjectLogInfo>& InsertObjectIntoLogVector(const %s &handle,\n' % item
+            object_logging_helper_header += '                                                                   std::vector<VulkanObjectLogInfo> &log_objects) {\n'
+            object_logging_helper_header += '    if (VK_NULL_HANDLE != handle) {\n'
+            object_logging_helper_header += '        bool in_list_already = false;\n'
+            object_logging_helper_header += '        for (uint32_t obj = 0; obj < log_objects.size(); ++obj) {\n'
+            object_logging_helper_header += '            if (log_objects[obj].type == %s &&\n' % type_object_name
+            object_logging_helper_header += '                log_objects[obj].handle == HandleToUint64(handle)) {\n'
+            object_logging_helper_header += '                in_list_already = true;\n'
+            object_logging_helper_header += '                break;\n'
+            object_logging_helper_header += '            }\n'
+            object_logging_helper_header += '        }\n'
+            object_logging_helper_header += '        if (!in_list_already) {\n'
+            object_logging_helper_header += '            VulkanObjectLogInfo cur_object = {};\n'
+            object_logging_helper_header += '            cur_object.type = %s;\n' % type_object_name
+            object_logging_helper_header += '            cur_object.handle = HandleToUint64(handle);\n'
+            object_logging_helper_header += '            log_objects.push_back(cur_object);\n'
+            object_logging_helper_header += '        }\n'
+            object_logging_helper_header += '    }\n'
+            object_logging_helper_header += '    return log_objects;\n'
+            object_logging_helper_header += '}\n\n'
+        return object_logging_helper_header
     #
     # Determine if a structure needs a safe_struct helper function
     # That is, it has an sType or one of its members is a pointer
@@ -910,6 +1018,8 @@ class HelperFileOutputGenerator(OutputGenerator):
             return self.GenerateObjectTypesHelperHeader()
         elif self.helper_file_type == 'extension_helper_header':
             return self.GenerateExtensionHelperHeader()
+        elif self.helper_file_type == 'vk_object_logging':
+            return self.GenerateObjectLoggingHelperHeader()
         else:
             return 'Bad Helper File Generator Option %s' % self.helper_file_type
 

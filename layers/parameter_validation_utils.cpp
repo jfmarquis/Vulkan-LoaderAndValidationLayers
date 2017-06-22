@@ -80,6 +80,12 @@ extern bool parameter_validation_vkCreateDebugReportCallbackEXT(VkInstance insta
                                                                 VkDebugReportCallbackEXT *pMsgCallback);
 extern bool parameter_validation_vkDestroyDebugReportCallbackEXT(VkInstance instance, VkDebugReportCallbackEXT msgCallback,
                                                                  const VkAllocationCallbacks *pAllocator);
+extern bool parameter_validation_vkCreateDebugUtilsMessengerEXT(VkInstance instance,
+                                                                const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
+                                                                const VkAllocationCallbacks *pAllocator,
+                                                                VkDebugUtilsMessengerEXT *pMessenger);
+extern bool parameter_validation_vkDestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT messenger,
+                                                                 const VkAllocationCallbacks *pAllocator);
 extern bool parameter_validation_vkCreateCommandPool(VkDevice device, const VkCommandPoolCreateInfo *pCreateInfo,
                                                      const VkAllocationCallbacks *pAllocator, VkCommandPool *pCommandPool);
 
@@ -93,10 +99,14 @@ std::unordered_map<void *, instance_layer_data *> instance_layer_data_map;
 void InitializeManualParameterValidationFunctionPointers(void);
 
 static void init_parameter_validation(instance_layer_data *instance_data, const VkAllocationCallbacks *pAllocator) {
-    layer_debug_actions(instance_data->report_data, instance_data->logging_callback, pAllocator, "lunarg_parameter_validation");
+    layer_debug_report_actions(instance_data->report_data, instance_data->logging_callback, pAllocator,
+                               "lunarg_parameter_validation");
+    layer_debug_messenger_actions(instance_data->report_data, instance_data->logging_messenger, pAllocator,
+                                  "lunarg_parameter_validation");
 }
 
-static const VkExtensionProperties instance_extensions[] = {{VK_EXT_DEBUG_REPORT_EXTENSION_NAME, VK_EXT_DEBUG_REPORT_SPEC_VERSION}};
+static const VkExtensionProperties instance_extensions[] = {{VK_EXT_DEBUG_REPORT_EXTENSION_NAME, VK_EXT_DEBUG_REPORT_SPEC_VERSION},
+                                                            {VK_EXT_DEBUG_UTILS_EXTENSION_NAME, VK_EXT_DEBUG_UTILS_SPEC_VERSION}};
 
 static const VkLayerProperties global_layer = {
     "VK_LAYER_LUNARG_parameter_validation", VK_LAYER_API_VERSION, 1, "LunarG Validation Layer",
@@ -204,21 +214,39 @@ VKAPI_ATTR VkResult VKAPI_CALL vkCreateInstance(const VkInstanceCreateInfo *pCre
         layer_init_instance_dispatch_table(*pInstance, &my_instance_data->dispatch_table, fpGetInstanceProcAddr);
         my_instance_data->instance = *pInstance;
         my_instance_data->report_data =
-            debug_report_create_instance(&my_instance_data->dispatch_table, *pInstance, pCreateInfo->enabledExtensionCount,
-                                         pCreateInfo->ppEnabledExtensionNames);
+            debug_utils_create_instance(&my_instance_data->dispatch_table, *pInstance, pCreateInfo->enabledExtensionCount,
+                                        pCreateInfo->ppEnabledExtensionNames);
 
         // Look for one or more debug report create info structures
         // and setup a callback(s) for each one found.
-        if (!layer_copy_tmp_callbacks(pCreateInfo->pNext, &my_instance_data->num_tmp_callbacks,
-                                      &my_instance_data->tmp_dbg_create_infos, &my_instance_data->tmp_callbacks)) {
-            if (my_instance_data->num_tmp_callbacks > 0) {
+        if (!layer_copy_tmp_debug_messengers(pCreateInfo->pNext, &my_instance_data->num_tmp_debug_messengers,
+                                             &my_instance_data->tmp_messenger_create_infos,
+                                             &my_instance_data->tmp_debug_messengers)) {
+            if (my_instance_data->num_tmp_debug_messengers > 0) {
                 // Setup the temporary callback(s) here to catch early issues:
-                if (layer_enable_tmp_callbacks(my_instance_data->report_data, my_instance_data->num_tmp_callbacks,
-                                               my_instance_data->tmp_dbg_create_infos, my_instance_data->tmp_callbacks)) {
+                if (layer_enable_tmp_debug_messengers(my_instance_data->report_data, my_instance_data->num_tmp_debug_messengers,
+                                                      my_instance_data->tmp_messenger_create_infos,
+                                                      my_instance_data->tmp_debug_messengers)) {
                     // Failure of setting up one or more of the callback.
                     // Therefore, clean up and don't use those callbacks:
-                    layer_free_tmp_callbacks(my_instance_data->tmp_dbg_create_infos, my_instance_data->tmp_callbacks);
-                    my_instance_data->num_tmp_callbacks = 0;
+                    layer_free_tmp_debug_messengers(my_instance_data->tmp_messenger_create_infos,
+                                                    my_instance_data->tmp_debug_messengers);
+                    my_instance_data->num_tmp_debug_messengers = 0;
+                }
+            }
+        }
+        if (!layer_copy_tmp_report_callbacks(pCreateInfo->pNext, &my_instance_data->num_tmp_report_callbacks,
+                                             &my_instance_data->tmp_report_create_infos, &my_instance_data->tmp_report_callbacks)) {
+            if (my_instance_data->num_tmp_report_callbacks > 0) {
+                // Setup the temporary callback(s) here to catch early issues:
+                if (layer_enable_tmp_report_callbacks(my_instance_data->report_data, my_instance_data->num_tmp_report_callbacks,
+                                                      my_instance_data->tmp_report_create_infos,
+                                                      my_instance_data->tmp_report_callbacks)) {
+                    // Failure of setting up one or more of the callback.
+                    // Therefore, clean up and don't use those callbacks:
+                    layer_free_tmp_report_callbacks(my_instance_data->tmp_report_create_infos,
+                                                    my_instance_data->tmp_report_callbacks);
+                    my_instance_data->num_tmp_report_callbacks = 0;
                 }
             }
         }
@@ -244,9 +272,13 @@ VKAPI_ATTR VkResult VKAPI_CALL vkCreateInstance(const VkInstanceCreateInfo *pCre
         }
 
         // Disable the tmp callbacks:
-        if (my_instance_data->num_tmp_callbacks > 0) {
-            layer_disable_tmp_callbacks(my_instance_data->report_data, my_instance_data->num_tmp_callbacks,
-                                        my_instance_data->tmp_callbacks);
+        if (my_instance_data->num_tmp_debug_messengers > 0) {
+            layer_disable_tmp_debug_messengers(my_instance_data->report_data, my_instance_data->num_tmp_debug_messengers,
+                                               my_instance_data->tmp_debug_messengers);
+        }
+        if (my_instance_data->num_tmp_report_callbacks > 0) {
+            layer_disable_tmp_report_callbacks(my_instance_data->report_data, my_instance_data->num_tmp_report_callbacks,
+                                               my_instance_data->tmp_report_callbacks);
         }
     }
 
@@ -261,9 +293,15 @@ VKAPI_ATTR void VKAPI_CALL vkDestroyInstance(VkInstance instance, const VkAlloca
 
     // Enable the temporary callback(s) here to catch vkDestroyInstance issues:
     bool callback_setup = false;
-    if (instance_data->num_tmp_callbacks > 0) {
-        if (!layer_enable_tmp_callbacks(instance_data->report_data, instance_data->num_tmp_callbacks,
-                                        instance_data->tmp_dbg_create_infos, instance_data->tmp_callbacks)) {
+    if (instance_data->num_tmp_debug_messengers > 0) {
+        if (!layer_enable_tmp_debug_messengers(instance_data->report_data, instance_data->num_tmp_debug_messengers,
+                                               instance_data->tmp_messenger_create_infos, instance_data->tmp_debug_messengers)) {
+            callback_setup = true;
+        }
+    }
+    if (instance_data->num_tmp_report_callbacks > 0) {
+        if (!layer_enable_tmp_report_callbacks(instance_data->report_data, instance_data->num_tmp_report_callbacks,
+                                               instance_data->tmp_report_create_infos, instance_data->tmp_report_callbacks)) {
             callback_setup = true;
         }
     }
@@ -272,24 +310,36 @@ VKAPI_ATTR void VKAPI_CALL vkDestroyInstance(VkInstance instance, const VkAlloca
 
     // Disable and cleanup the temporary callback(s):
     if (callback_setup) {
-        layer_disable_tmp_callbacks(instance_data->report_data, instance_data->num_tmp_callbacks, instance_data->tmp_callbacks);
+        layer_disable_tmp_debug_messengers(instance_data->report_data, instance_data->num_tmp_debug_messengers,
+                                           instance_data->tmp_debug_messengers);
+        layer_disable_tmp_report_callbacks(instance_data->report_data, instance_data->num_tmp_report_callbacks,
+                                           instance_data->tmp_report_callbacks);
     }
-    if (instance_data->num_tmp_callbacks > 0) {
-        layer_free_tmp_callbacks(instance_data->tmp_dbg_create_infos, instance_data->tmp_callbacks);
-        instance_data->num_tmp_callbacks = 0;
+    if (instance_data->num_tmp_debug_messengers > 0) {
+        layer_free_tmp_debug_messengers(instance_data->tmp_messenger_create_infos, instance_data->tmp_debug_messengers);
+        instance_data->num_tmp_debug_messengers = 0;
+    }
+    if (instance_data->num_tmp_report_callbacks > 0) {
+        layer_free_tmp_report_callbacks(instance_data->tmp_report_create_infos, instance_data->tmp_report_callbacks);
+        instance_data->num_tmp_report_callbacks = 0;
     }
 
     if (!skip) {
         instance_data->dispatch_table.DestroyInstance(instance, pAllocator);
 
         // Clean up logging callback, if any
+        while (instance_data->logging_messenger.size() > 0) {
+            VkDebugUtilsMessengerEXT messenger = instance_data->logging_messenger.back();
+            layer_destroy_messenger_callback(instance_data->report_data, messenger, pAllocator);
+            instance_data->logging_messenger.pop_back();
+        }
         while (instance_data->logging_callback.size() > 0) {
             VkDebugReportCallbackEXT callback = instance_data->logging_callback.back();
-            layer_destroy_msg_callback(instance_data->report_data, callback, pAllocator);
+            layer_destroy_report_callback(instance_data->report_data, callback, pAllocator);
             instance_data->logging_callback.pop_back();
         }
 
-        layer_debug_report_destroy_instance(instance_data->report_data);
+        layer_debug_utils_destroy_instance(instance_data->report_data);
     }
 
     FreeLayerDataPtr(key, instance_layer_data_map);
@@ -305,7 +355,11 @@ VKAPI_ATTR VkResult VKAPI_CALL vkCreateDebugReportCallbackEXT(VkInstance instanc
     auto instance_data = GetLayerDataPtr(get_dispatch_key(instance), instance_layer_data_map);
     VkResult result = instance_data->dispatch_table.CreateDebugReportCallbackEXT(instance, pCreateInfo, pAllocator, pMsgCallback);
     if (result == VK_SUCCESS) {
-        result = layer_create_msg_callback(instance_data->report_data, false, pCreateInfo, pAllocator, pMsgCallback);
+        result = layer_create_report_callback(instance_data->report_data, false, pCreateInfo, pAllocator, pMsgCallback);
+        // If something happened during this call, clean up the message callback that was created earlier in the lower levels
+        if (VK_SUCCESS != result) {
+            instance_data->dispatch_table.DestroyDebugReportCallbackEXT(instance, *pMsgCallback, pAllocator);
+        }
     }
     return result;
 }
@@ -316,7 +370,36 @@ VKAPI_ATTR void VKAPI_CALL vkDestroyDebugReportCallbackEXT(VkInstance instance, 
     if (!skip) {
         auto instance_data = GetLayerDataPtr(get_dispatch_key(instance), instance_layer_data_map);
         instance_data->dispatch_table.DestroyDebugReportCallbackEXT(instance, msgCallback, pAllocator);
-        layer_destroy_msg_callback(instance_data->report_data, msgCallback, pAllocator);
+        layer_destroy_report_callback(instance_data->report_data, msgCallback, pAllocator);
+    }
+}
+
+VKAPI_ATTR VkResult VKAPI_CALL vkCreateDebugUtilsMessengerEXT(VkInstance instance,
+                                                            const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
+                                                            const VkAllocationCallbacks *pAllocator,
+                                                            VkDebugUtilsMessengerEXT *pMessenger) {
+    bool skip = parameter_validation_vkCreateDebugUtilsMessengerEXT(instance, pCreateInfo, pAllocator, pMessenger);
+    if (skip) return VK_ERROR_VALIDATION_FAILED_EXT;
+
+    auto instance_data = GetLayerDataPtr(get_dispatch_key(instance), instance_layer_data_map);
+    VkResult result = instance_data->dispatch_table.CreateDebugUtilsMessengerEXT(instance, pCreateInfo, pAllocator, pMessenger);
+    if (VK_SUCCESS == result) {
+        result = layer_create_messenger_callback(instance_data->report_data, false, pCreateInfo, pAllocator, pMessenger);
+        // If something happened during this call, clean up the message callback that was created earlier in the lower levels
+        if (VK_SUCCESS != result) {
+            instance_data->dispatch_table.DestroyDebugUtilsMessengerEXT(instance, *pMessenger, pAllocator);
+        }
+    }
+    return result;
+}
+
+VKAPI_ATTR void VKAPI_CALL vkDestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT messenger,
+                                                         const VkAllocationCallbacks *pAllocator) {
+    bool skip = parameter_validation_vkDestroyDebugUtilsMessengerEXT(instance, messenger, pAllocator);
+    if (!skip) {
+        auto instance_data = GetLayerDataPtr(get_dispatch_key(instance), instance_layer_data_map);
+        instance_data->dispatch_table.DestroyDebugUtilsMessengerEXT(instance, messenger, pAllocator);
+        layer_destroy_messenger_callback(instance_data->report_data, messenger, pAllocator);
     }
 }
 
@@ -477,7 +560,7 @@ VKAPI_ATTR VkResult VKAPI_CALL vkCreateDevice(VkPhysicalDevice physicalDevice, c
             layer_data *my_device_data = GetLayerDataPtr(get_dispatch_key(*pDevice), layer_data_map);
             assert(my_device_data != nullptr);
 
-            my_device_data->report_data = layer_debug_report_create_device(my_instance_data->report_data, *pDevice);
+            my_device_data->report_data = layer_debug_utils_create_device(my_instance_data->report_data, *pDevice);
             layer_init_device_dispatch_table(*pDevice, &my_device_data->dispatch_table, fpGetDeviceProcAddr);
 
             my_device_data->extensions.InitFromDeviceCreateInfo(&my_instance_data->extensions, pCreateInfo);
@@ -519,7 +602,7 @@ VKAPI_ATTR void VKAPI_CALL vkDestroyDevice(VkDevice device, const VkAllocationCa
     }
 
     if (!skip) {
-        layer_debug_report_destroy_device(device);
+        layer_debug_utils_destroy_device(device);
         device_data->dispatch_table.DestroyDevice(device, pAllocator);
     }
     FreeLayerDataPtr(key, layer_data_map);
@@ -1643,12 +1726,11 @@ bool pv_vkUpdateDescriptorSets(VkDevice device, uint32_t descriptorWriteCount, c
                                                          ParameterName("pDescriptorWrites[%i].pImageInfo[%i].imageView",
                                                                        ParameterName::IndexVector{i, descriptor_index}),
                                                          pDescriptorWrites[i].pImageInfo[descriptor_index].imageView);
-                        skip |= validate_ranged_enum(report_data, "vkUpdateDescriptorSets",
-                                                     ParameterName("pDescriptorWrites[%i].pImageInfo[%i].imageLayout",
-                                                                   ParameterName::IndexVector{i, descriptor_index}),
-                                                     "VkImageLayout", AllVkImageLayoutEnums,
-                                                     pDescriptorWrites[i].pImageInfo[descriptor_index].imageLayout,
-                                                     VALIDATION_ERROR_UNDEFINED);
+                        skip |= validate_ranged_enum(
+                            report_data, "vkUpdateDescriptorSets", ParameterName("pDescriptorWrites[%i].pImageInfo[%i].imageLayout",
+                                                                                 ParameterName::IndexVector{i, descriptor_index}),
+                            "VkImageLayout", AllVkImageLayoutEnums, pDescriptorWrites[i].pImageInfo[descriptor_index].imageLayout,
+                            VALIDATION_ERROR_UNDEFINED);
                     }
                 }
             } else if ((pDescriptorWrites[i].descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER) ||
@@ -2116,11 +2198,11 @@ bool pv_vkCmdUpdateBuffer(VkCommandBuffer commandBuffer, VkBuffer dstBuffer, VkD
     }
 
     if ((dataSize <= 0) || (dataSize > 65536)) {
-        skip |= log_msg(device_data->report_data, VK_DEBUG_REPORT_ERROR_BIT_EXT, VK_DEBUG_REPORT_OBJECT_TYPE_UNKNOWN_EXT, 0,
-                        __LINE__, VALIDATION_ERROR_1e40004a, LayerName,
-                        "vkCmdUpdateBuffer() parameter, VkDeviceSize dataSize (0x%" PRIxLEAST64
-                        "), must be greater than zero and less than or equal to 65536. %s",
-                        dataSize, validation_error_map[VALIDATION_ERROR_1e40004a]);
+        skip |=
+            log_msg(device_data->report_data, VK_DEBUG_REPORT_ERROR_BIT_EXT, VK_DEBUG_REPORT_OBJECT_TYPE_UNKNOWN_EXT, 0, __LINE__,
+                    VALIDATION_ERROR_1e40004a, LayerName, "vkCmdUpdateBuffer() parameter, VkDeviceSize dataSize (0x%" PRIxLEAST64
+                                                          "), must be greater than zero and less than or equal to 65536. %s",
+                    dataSize, validation_error_map[VALIDATION_ERROR_1e40004a]);
     } else if (dataSize & 3) {
         skip |= log_msg(device_data->report_data, VK_DEBUG_REPORT_ERROR_BIT_EXT, VK_DEBUG_REPORT_OBJECT_TYPE_UNKNOWN_EXT, 0,
                         __LINE__, VALIDATION_ERROR_1e40004c, LayerName,

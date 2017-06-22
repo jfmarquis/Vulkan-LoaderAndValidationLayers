@@ -138,10 +138,10 @@ class ParameterValidationOutputGenerator(OutputGenerator):
             'vkCreateDebugReportCallbackKHR',
             'vkDestroyDebugReportCallbackKHR',
             'vkEnumerateInstanceLayerProperties',
-            'vkEnumerateInstanceExtensionProperties',
-            'vkEnumerateDeviceLayerProperties',
+             'vkEnumerateInstanceExtensionProperties',
+             'vkEnumerateDeviceLayerProperties',
             'vkCmdDebugMarkerEndEXT',
-            'vkEnumerateDeviceExtensionProperties',
+             'vkEnumerateDeviceExtensionProperties',
             ]
         self.validate_only = [
             'vkCreateInstance',
@@ -152,6 +152,8 @@ class ParameterValidationOutputGenerator(OutputGenerator):
             'vkCreateDebugReportCallbackEXT',
             'vkDestroyDebugReportCallbackEXT',
             'vkCreateCommandPool',
+            'vkCreateDebugUtilsMessengerEXT',
+            'vkDestroyDebugUtilsMessengerEXT',
             ]
         # Structure fields to ignore
         self.structMemberBlacklist = { 'VkWriteDescriptorSet' : ['dstSet'] }
