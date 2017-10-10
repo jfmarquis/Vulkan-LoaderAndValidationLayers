@@ -35,6 +35,27 @@ class VkImageObj;
 
 using namespace std;
 
+// Implements a generic 2 arguement enumeration.  Input data is not changed if first enumeration fails
+template <typename Data, typename Func>
+VkResult VkTestEnumerate(std::vector<Data> &data, Func &enumerator) {
+    uint32_t count = 0;
+    VkResult res = enumerator(&count, NULL);
+    if (VK_SUCCESS == res) {
+        data.clear();
+        data.resize(count);
+        res = enumerator(&count, data.data());
+    }
+    return res;
+}
+
+// Use lambda partial application to map a 3 argument enumeration to the 3 arguement enumeration, as
+// the context is constant.
+template <typename Context, typename Data, typename Func>
+VkResult VkTestEnumerate(Context context, std::vector<Data> &data, Func &enumerator) {
+    auto wrapper = [context, &enumerator](uint32_t *count, Data *data) { return enumerator(context, count, data); };
+    return VkTestEnumerate(data, wrapper);
+}
+
 class VkDeviceObj : public vk_testing::Device {
    public:
     VkDeviceObj(uint32_t id, VkPhysicalDevice obj);
