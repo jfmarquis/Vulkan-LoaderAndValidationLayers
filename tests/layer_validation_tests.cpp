@@ -21127,6 +21127,10 @@ TEST_F(VkPositiveLayerTest, EmptyDescriptorUpdateTest) {
         vkDestroyBuffer(m_device->device(), buffer, NULL);
         return;
     }
+    // Make sure allocation is sufficiently large to accommodate buffer requirements
+    if (mem_reqs.size > mem_alloc.allocationSize) {
+        mem_alloc.allocationSize = mem_reqs.size;
+    }
 
     VkDeviceMemory mem;
     err = vkAllocateMemory(m_device->device(), &mem_alloc, NULL, &mem);
